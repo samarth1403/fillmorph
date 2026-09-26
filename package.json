@@ -1,0 +1,45 @@
+{
+  "name": "fillmorph",
+  "version": "0.0.0",
+  "description": "Morph filled SVG icons into other filled SVG icons with spring physics.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    },
+    "./dom": {
+      "types": "./dist/dom/index.d.ts",
+      "import": "./dist/dom/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "typecheck": "tsc -b"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@types/react": "^19.3.0",
+    "react": "^19.3.0",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.1"
+  }
+}

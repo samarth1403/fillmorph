@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "rootDir": ".",
+    "outDir": "../../.tsbuild/react",
+    "lib": ["ES2022", "DOM"],
+    "jsx": "react-jsx",
+    // Resolve core's and dom's public specifiers to their sources, which the project references below own.
+    "paths": {
+      "fillmorph": ["../core/index.ts"],
+      "fillmorph/dom": ["../dom/index.ts"]
+    }
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"],
+  "references": [{ "path": "../core" }, { "path": "../dom" }]
+}

@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "rootDir": ".",
+    "outDir": "../../.tsbuild/dom",
+    "lib": ["ES2022", "DOM"],
+    // Resolve core's public specifier to its source, which the project reference below owns.
+    "paths": {
+      "fillmorph": ["../core/index.ts"]
+    }
+  },
+  "include": ["./**/*.ts"],
+  "references": [{ "path": "../core" }]
+}

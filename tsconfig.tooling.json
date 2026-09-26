@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./.tsbuild/tooling",
+    "lib": ["ES2022"]
+  },
+  "include": ["tsup.config.ts", "vitest.config.ts"]
+}

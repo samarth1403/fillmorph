@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "rootDir": ".",
+    "outDir": "../../.tsbuild/core",
+    // Core is pure geometry/animation math: no DOM lib, so `document`/`window` are compile errors here.
+    "lib": ["ES2022"]
+  },
+  "include": ["./**/*.ts"]
+}

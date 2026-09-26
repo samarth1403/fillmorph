@@ -1,0 +1,121 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/.tsbuild",
+      "!**/context"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        "noExplicitAny": "error"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["src/core/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "error",
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "fillmorph": "Import from a sibling file inside src/core instead of the package root.",
+                  "fillmorph/dom": "core must not depend on fillmorph/dom (dependency direction: react -> dom -> core).",
+                  "fillmorph/react": "core must not depend on fillmorph/react (dependency direction: react -> dom -> core).",
+                  "react": "core is framework-agnostic and must not import react."
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**",
+                      "../dom/**",
+                      "../react/**"
+                    ],
+                    "message": "core must not import from react or from the dom/react subpaths."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/dom/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "error",
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "fillmorph/dom": "Import from a sibling file inside src/dom instead of the package subpath.",
+                  "fillmorph/react": "dom must not depend on fillmorph/react (dependency direction: react -> dom -> core).",
+                  "react": "dom is framework-agnostic and must not import react."
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**",
+                      "../core/**",
+                      "../react/**"
+                    ],
+                    "message": "dom may reach core only through the public \"fillmorph\" specifier, and must not import react."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/react/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["../core/**", "../dom/**", "fillmorph/*/**"],
+                    "message": "react may reach core and dom only through their public \"fillmorph\" / \"fillmorph/dom\" specifiers."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

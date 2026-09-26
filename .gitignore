@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.tsbuild/
+*.tsbuildinfo
+coverage/
+.DS_Store
+.env
+
+# Kept local until v1 works (see context/progress-tracker.md)
+context/
+CLAUDE.md
