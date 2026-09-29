@@ -1,13 +1,7 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": [
-      "**",
-      "!**/node_modules",
-      "!**/dist",
-      "!**/.tsbuild",
-      "!**/context"
-    ]
+    "includes": ["**", "!**/node_modules", "!**/dist", "!**/.tsbuild", "!**/context"]
   },
   "formatter": {
     "enabled": true,
@@ -49,13 +43,7 @@
                 },
                 "patterns": [
                   {
-                    "group": [
-                      "react/**",
-                      "react-dom",
-                      "react-dom/**",
-                      "../dom/**",
-                      "../react/**"
-                    ],
+                    "group": ["react/**", "react-dom", "react-dom/**", "../dom/**", "../react/**"],
                     "message": "core must not import from react or from the dom/react subpaths."
                   }
                 ]
@@ -81,13 +69,7 @@
                 },
                 "patterns": [
                   {
-                    "group": [
-                      "react/**",
-                      "react-dom",
-                      "react-dom/**",
-                      "../core/**",
-                      "../react/**"
-                    ],
+                    "group": ["react/**", "react-dom", "react-dom/**", "../core/**", "../react/**"],
                     "message": "dom may reach core only through the public \"fillmorph\" specifier, and must not import react."
                   }
                 ]
