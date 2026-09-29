@@ -1,7 +1,15 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": ["**", "!**/node_modules", "!**/dist", "!**/.tsbuild", "!**/context"]
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/.tsbuild",
+      "!**/context",
+      "!harness/output",
+      "!harness/fixtures"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -71,6 +79,31 @@
                   {
                     "group": ["react/**", "react-dom", "react-dom/**", "../core/**", "../react/**"],
                     "message": "dom may reach core only through the public \"fillmorph\" specifier, and must not import react."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["harness/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "error",
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "fillmorph/dom": "The harness grades core's geometry and timing; it doesn't use fillmorph/dom.",
+                  "fillmorph/react": "The harness grades core's geometry and timing; it doesn't use fillmorph/react."
+                },
+                "patterns": [
+                  {
+                    "group": ["../src/**", "../../src/**", "../../../src/**"],
+                    "message": "The harness may reach core only through the public \"fillmorph\" specifier."
                   }
                 ]
               }

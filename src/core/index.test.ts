@@ -6,7 +6,7 @@ describe("fillmorph (core)", () => {
     expect(core).toBeTypeOf("object");
   });
 
-  it("exposes only the parser, the canonical frame, and the three error types at runtime", async () => {
+  it("exposes only the parser, the canonical frame, the renderer, and the three error types at runtime", async () => {
     const core = await import("./index");
     expect(Object.keys(core).sort()).toEqual([
       "CANONICAL_VIEW_BOX",
@@ -14,6 +14,7 @@ describe("fillmorph (core)", () => {
       "FillmorphMarkupError",
       "FillmorphParseError",
       "parseIcon",
+      "renderContours",
     ]);
   });
 });

@@ -4,6 +4,7 @@
     { "path": "./src/core" },
     { "path": "./src/dom" },
     { "path": "./src/react" },
+    { "path": "./harness" },
     { "path": "./tsconfig.tooling.json" }
   ]
 }

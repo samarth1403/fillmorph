@@ -1,0 +1,21 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "rootDir": ".",
+    "outDir": "../.tsbuild/harness",
+    "lib": ["ES2022"],
+    // `pnpm harness` runs these files directly with Node's built-in type stripping (no build step,
+    // no extra dev dependency), which needs explicit `.ts` import extensions and erasable-only syntax.
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    // Core is reached only through its public specifier, resolved to source for type-checking.
+    "paths": {
+      "fillmorph": ["../src/core/index.ts"]
+    }
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["./output"],
+  "references": [{ "path": "../src/core" }]
+}

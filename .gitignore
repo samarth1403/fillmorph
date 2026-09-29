@@ -3,6 +3,7 @@ dist/
 .tsbuild/
 *.tsbuildinfo
 coverage/
+harness/output/
 .DS_Store
 .env
 

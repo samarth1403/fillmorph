@@ -24,7 +24,8 @@
     "lint": "biome lint .",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "harness": "tsup --silent && node harness/cli.ts"
   },
   "peerDependencies": {
     "react": ">=18"
