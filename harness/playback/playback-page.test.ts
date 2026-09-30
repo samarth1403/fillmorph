@@ -1,13 +1,11 @@
 import { renderContours } from "fillmorph";
 import { describe, expect, it } from "vitest";
 import { canonicalViewBoxAttribute } from "../display.ts";
-import { naiveMorph } from "../morph-fn.ts";
 import { findPair, REFERENCE_PAIRS } from "../pairs.ts";
 import { square } from "../test-shapes.ts";
 import { renderPlaybackPage } from "./playback-page.ts";
 import { runPairPlayback } from "./run-pair-playback.ts";
 import { runPlayback } from "./runner.ts";
-import { dampedStubStep } from "./stub-steps.ts";
 import { checkTraceGeometry } from "./trace-geometry.ts";
 
 function embeddedData(html: string, index: number): { frames: { t: number; d: string }[] } {
@@ -20,9 +18,7 @@ function embeddedData(html: string, index: number): { frames: { t: number; d: st
 
 describe("renderPlaybackPage", () => {
   const trace = runPlayback({
-    step: dampedStubStep,
     config: { stiffness: 170, damping: 26, mass: 1 },
-    morph: naiveMorph,
     from: [square("c0", null, 0, 30, 50, 10)],
     to: [square("c0", null, 0, 70, 50, 10)],
     duration: 1,
@@ -63,11 +59,7 @@ describe("runPairPlayback", () => {
   it("runs a reference pair end to end: auto-tune, interruption, and every check on the trace", () => {
     const pair = findPair("solid-heart-to-solid-circle") ?? REFERENCE_PAIRS[0];
     if (pair === undefined) throw new Error("no reference pairs");
-    const section = runPairPlayback(pair, {
-      step: dampedStubStep,
-      morph: naiveMorph,
-      base: { stiffness: 170, damping: 26, mass: 1 },
-    });
+    const section = runPairPlayback(pair, { base: { stiffness: 170, damping: 26, mass: 1 } });
     expect(section.trace.legs).toHaveLength(2);
     expect(section.checks.map((check) => check.check)).toEqual([
       "self-intersection",
@@ -75,6 +67,7 @@ describe("runPairPlayback", () => {
       "containment",
       "settling",
       "velocity-continuity",
+      "position-continuity",
     ]);
     expect(section.tuning?.config).not.toBeNull();
     expect(renderPlaybackPage([section], "stub")).toContain(pair.name);

@@ -1,4 +1,4 @@
-import type { MorphFn } from "../morph-fn.ts";
+import type { SpringConfig } from "fillmorph";
 import { type PlaybackOptions, runPlayback } from "./runner.ts";
 import {
   type ContinuityOptions,
@@ -8,7 +8,6 @@ import {
   DEFAULT_SETTLING,
   type SettlingOptions,
 } from "./timing-checks.ts";
-import type { SpringConfig } from "./types.ts";
 
 export type AutoTuneOptions = {
   /** The starting config: kept unchanged if it already passes. */
@@ -47,13 +46,12 @@ function dampingRatio(config: SpringConfig): number {
 function evaluate(
   config: SpringConfig,
   playback: Omit<PlaybackOptions, "config">,
-  morph: MorphFn,
   settling: SettlingOptions,
   continuity: ContinuityOptions,
 ): AutoTuneCandidate {
   const trace = runPlayback({ ...playback, config });
   const settled = checkSettling(trace, settling);
-  const continuous = checkVelocityContinuity(trace, morph, continuity);
+  const continuous = checkVelocityContinuity(trace, continuity);
   const failures = [...settled.failures, ...continuous.failures].map((failure) => failure.message);
   return { config, passed: failures.length === 0, settleTime: settled.settleTime, failures };
 }
@@ -68,13 +66,13 @@ function evaluate(
  *    faster settle, then to candidate order. Staying close keeps the designer's intended feel.
  * 3. If nothing passes, `config` is null.
  *
- * Geometry checks aren't tuned against: they judge the `MorphFn`, which the spring config can't fix.
+ * Geometry checks aren't tuned against: they judge `interpolate`'s geometry, which the spring config can't
+ * fix.
  */
 export function autoTuneSpring(options: AutoTuneOptions): AutoTuneResult {
   const settling = options.settling ?? DEFAULT_SETTLING;
   const continuity = options.continuity ?? DEFAULT_CONTINUITY;
-  const { morph } = options.playback;
-  const base = evaluate(options.base, options.playback, morph, settling, continuity);
+  const base = evaluate(options.base, options.playback, settling, continuity);
   if (base.passed) return { config: options.base, baseConfigPassed: true, candidates: [base] };
 
   const candidates: AutoTuneCandidate[] = [base];
@@ -86,7 +84,7 @@ export function autoTuneSpring(options: AutoTuneOptions): AutoTuneResult {
         damping: ratio * 2 * Math.sqrt(stiffness * options.base.mass),
         mass: options.base.mass,
       };
-      candidates.push(evaluate(config, options.playback, morph, settling, continuity));
+      candidates.push(evaluate(config, options.playback, settling, continuity));
     }
   }
 

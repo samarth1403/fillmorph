@@ -1,7 +1,6 @@
 /**
- * `fillmorph/dom` — the thin layer that reads and writes SVG `d` attributes
- * and drives the animation loop. Depends only on `fillmorph` (core).
- *
- * No public API yet; the animation driver lands in spec 05.
+ * `fillmorph/dom` — the stateful layer between core's pure math and the page: it owns the spring
+ * state and the `requestAnimationFrame` loop. Depends only on `fillmorph` (core).
  */
-export {};
+export type { MorphDriver, MorphListener } from "./morph-driver";
+export { createMorphDriver } from "./morph-driver";

@@ -1,7 +1,6 @@
-import type { Contour, Point } from "fillmorph";
+import { type Contour, interpolate, type Point } from "fillmorph";
 import { type CheckFailure, type CheckResult, checkResult } from "../checks/check-result.ts";
-import { formatNumber } from "../geometry.ts";
-import type { MorphFn } from "../morph-fn.ts";
+import { distanceToSegment, formatNumber, polygonArea, signedPolygonArea } from "../geometry.ts";
 import type { PlaybackTrace, TraceEntry } from "./runner.ts";
 
 export type SettlingOptions = {
@@ -109,22 +108,17 @@ export type ContinuityOptions = {
 /** Starting values, tunable. */
 export const DEFAULT_CONTINUITY: ContinuityOptions = { maxSpeedRatio: 1.5, restSpeed: 1e-3 };
 
-/** Step for the numerical derivative of a `MorphFn` with respect to progress. */
+/** Step for the numerical derivative of `interpolate` with respect to progress. */
 const DERIVATIVE_STEP = 1e-4;
 
 /**
- * Root-mean-square speed of every vertex, in canonical units per progress unit, of `morph(from,
+ * Root-mean-square speed of every vertex, in canonical units per progress unit, of `interpolate(from,
  * to, ·)` at `progress`. Null when the two samples don't share a structure (ids and point counts),
  * since vertices can't then be paired.
  */
-function shapeRate(
-  morph: MorphFn,
-  from: Contour[],
-  to: Contour[],
-  progress: number,
-): number | null {
-  const before = morph(from, to, progress - DERIVATIVE_STEP);
-  const after = morph(from, to, progress + DERIVATIVE_STEP);
+function shapeRate(from: Contour[], to: Contour[], progress: number): number | null {
+  const before = interpolate(from, to, progress - DERIVATIVE_STEP);
+  const after = interpolate(from, to, progress + DERIVATIVE_STEP);
   if (before.length !== after.length) return null;
   let sumOfSquares = 0;
   let count = 0;
@@ -152,7 +146,6 @@ function shapeRate(
  */
 export function checkVelocityContinuity(
   trace: PlaybackTrace,
-  morph: MorphFn,
   options: ContinuityOptions = DEFAULT_CONTINUITY,
 ): CheckResult {
   if (trace.interruptions.length === 0) {
@@ -171,13 +164,13 @@ export function checkVelocityContinuity(
       .filter(({ entry }) => entry.time === interruption.time)
       .map(({ index }) => index);
     const at = `t=${formatNumber(interruption.time)}s`;
-    const rateBefore = shapeRate(morph, context.oldFrom, context.oldTo, context.position);
-    const rateAfter = shapeRate(morph, context.snapshot, context.newTo, 0);
+    const rateBefore = shapeRate(context.oldFrom, context.oldTo, context.position);
+    const rateAfter = shapeRate(context.snapshot, context.newTo, 0);
     if (rateBefore === null || rateAfter === null) {
       failures.push({
         frameIndices,
         contourId: null,
-        message: `${at}: the MorphFn's output changes structure between nearby progress values, so on-screen speed can't be measured`,
+        message: `${at}: interpolate's output changes structure between nearby progress values, so on-screen speed can't be measured`,
       });
       continue;
     }
@@ -203,4 +196,166 @@ export function checkVelocityContinuity(
     }
   }
   return checkResult("velocity-continuity", failures, notes);
+}
+
+export type PositionContinuityOptions = {
+  /** The largest allowed distance, in canonical units, between the two frames' outlines. */
+  maxDistance: number;
+};
+
+/**
+ * 0.1 canonical units: 1e-3 of the 100-unit canonical frame, the same scale as the settling
+ * check's 1e-3 position tolerance (sub-pixel at any icon size). A correct retarget measures
+ * ~1e-13, since the new leg's first frame lays out the very same outline; a jump is tens of units.
+ */
+export const DEFAULT_POSITION_CONTINUITY: PositionContinuityOptions = { maxDistance: 0.1 };
+
+/** Below this area (canonical units²) a contour draws nothing: e.g. a placeholder point. */
+const INVISIBLE_AREA = 1e-9;
+
+type FarthestPoint = { distance: number; point: Point };
+
+/** How far `from`'s farthest vertex is from `to`'s nearest outline edge. */
+function farthestFrom(from: readonly Point[][], to: readonly Point[][]): FarthestPoint {
+  let farthest: FarthestPoint = { distance: 0, point: { x: 0, y: 0 } };
+  for (const contour of from) {
+    for (const point of contour) {
+      let nearest = Number.POSITIVE_INFINITY;
+      for (const outline of to) {
+        for (const [index, start] of outline.entries()) {
+          const end = outline[(index + 1) % outline.length] as Point;
+          nearest = Math.min(nearest, distanceToSegment(point, start, end));
+        }
+      }
+      if (nearest > farthest.distance) farthest = { distance: nearest, point };
+    }
+  }
+  return farthest;
+}
+
+function visibleOutlines(contours: readonly Contour[]): Point[][] {
+  return contours
+    .filter((contour) => Math.abs(polygonArea(contour.points)) > INVISIBLE_AREA)
+    .map((contour) => contour.points);
+}
+
+/**
+ * Deliverable #7 position-continuity check: at each interruption, the shape on screen just before
+ * the retarget must be the shape the new leg starts from — the retarget may turn the motion, never
+ * make the shape jump. Two things are compared against the old leg's last frame:
+ *
+ * - **where the new leg's motion starts:** `interpolate(leg.from, leg.to, 0)` for the new leg as
+ *   recorded in the trace. This is what catches a new leg that starts from the wrong `from` (e.g.
+ *   the original icon instead of the on-screen snapshot): the recorded frame at the retarget
+ *   instant can still look right, and the jump would only show on the next step;
+ * - **the new leg's first recorded frame** (the second trace entry at the interruption's time).
+ *
+ * The two frames can't be compared point by point: the new leg's first frame is `interpolate`'s
+ * layout of the snapshot, with its own point count, start points and ids. So they're compared as
+ * drawn outlines: the symmetric Hausdorff distance between their visible contours' edges (every
+ * vertex of each must lie within `maxDistance` of some edge of the other), plus their net signed
+ * area, which catches a hole turned into an outline. Zero-area contours are skipped: they draw
+ * nothing, and an appearing contour starts as exactly such a placeholder point.
+ */
+export function checkPositionContinuity(
+  trace: PlaybackTrace,
+  options: PositionContinuityOptions = DEFAULT_POSITION_CONTINUITY,
+): CheckResult {
+  if (trace.interruptions.length === 0) {
+    return checkResult(
+      "position-continuity",
+      [],
+      ["no interruption in this trace; nothing to check"],
+    );
+  }
+  const failures: CheckFailure[] = [];
+  const notes: string[] = [];
+  for (const interruption of trace.interruptions) {
+    const at = `t=${formatNumber(interruption.time)}s`;
+    const frameIndices = trace.entries
+      .map((entry, index) => ({ entry, index }))
+      .filter(({ entry }) => entry.time === interruption.time)
+      .map(({ index }) => index);
+    const [beforeIndex, afterIndex] = frameIndices;
+    const before = trace.entries[beforeIndex ?? -1];
+    const after = trace.entries[afterIndex ?? -1];
+    if (before === undefined || after === undefined || frameIndices.length !== 2) {
+      failures.push({
+        frameIndices,
+        contourId: null,
+        message: `${at}: expected the old leg's last frame and the new leg's first frame at the interruption, found ${frameIndices.length} frame(s)`,
+      });
+      continue;
+    }
+    const leg = trace.legs.find((candidate) => candidate.index === after.leg);
+    const comparisons: { label: string; contours: Contour[] }[] = [
+      {
+        label: "the new leg's starting shape",
+        contours: leg === undefined ? [] : interpolate(leg.from, leg.to, 0),
+      },
+      { label: "the new leg's first frame", contours: after.contours },
+    ];
+    let failed = false;
+    let largest = 0;
+    for (const { label, contours } of comparisons) {
+      const problem = compareOutlines(before.contours, contours, options);
+      if (problem.message !== null) {
+        failures.push({
+          frameIndices,
+          contourId: null,
+          message: `${at}: ${label} ${problem.message}`,
+        });
+        failed = true;
+        break;
+      }
+      largest = Math.max(largest, problem.distance);
+    }
+    if (!failed) notes.push(`${at}: outlines ${formatNumber(largest, 6)} units apart`);
+  }
+  return checkResult("position-continuity", failures, notes);
+}
+
+function perimeter(outline: readonly Point[]): number {
+  return outline.reduce((length, point, index) => {
+    const next = outline[(index + 1) % outline.length] as Point;
+    return length + Math.hypot(next.x - point.x, next.y - point.y);
+  }, 0);
+}
+
+/**
+ * Compares two frames as drawn: the symmetric Hausdorff distance between their visible outlines,
+ * then their net signed area. `message` is null when they match within `options`.
+ */
+function compareOutlines(
+  before: readonly Contour[],
+  after: readonly Contour[],
+  options: PositionContinuityOptions,
+): { distance: number; message: string | null } {
+  const outlinesBefore = visibleOutlines(before);
+  const outlinesAfter = visibleOutlines(after);
+  const lost = farthestFrom(outlinesBefore, outlinesAfter);
+  const gained = farthestFrom(outlinesAfter, outlinesBefore);
+  const worst = lost.distance >= gained.distance ? lost : gained;
+  if (!(worst.distance <= options.maxDistance)) {
+    return {
+      distance: worst.distance,
+      message:
+        `jumps away from the shape on screen — outlines ${formatNumber(worst.distance, 6)} units ` +
+        `apart at (${formatNumber(worst.point.x)}, ${formatNumber(worst.point.y)}); allowed ${options.maxDistance}`,
+    };
+  }
+  const netArea = (outlines: Point[][]) =>
+    outlines.reduce((sum, outline) => sum + signedPolygonArea(outline), 0);
+  const areaChange = Math.abs(netArea(outlinesAfter) - netArea(outlinesBefore));
+  // Only an area change beyond what the allowed outline offset could explain counts.
+  const allowedAreaChange =
+    options.maxDistance *
+    [...outlinesBefore, ...outlinesAfter].reduce((sum, outline) => sum + perimeter(outline), 0);
+  if (!(areaChange <= allowedAreaChange)) {
+    return {
+      distance: worst.distance,
+      message: `changes the filled area by ${formatNumber(areaChange)} units² though the outlines match, so a contour's fill flipped`,
+    };
+  }
+  return { distance: worst.distance, message: null };
 }

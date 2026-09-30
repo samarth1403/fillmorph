@@ -1,25 +1,21 @@
-import { parseIcon } from "fillmorph";
+import { parseIcon, type SpringConfig } from "fillmorph";
 import { loadFixture } from "../fixtures.ts";
-import type { MorphFn } from "../morph-fn.ts";
 import type { ReferencePair } from "../pairs.ts";
 import { autoTuneSpring } from "./auto-tune.ts";
 import type { PlaybackSection } from "./playback-page.ts";
-import { DEFAULT_PLAYBACK_DT, runPlayback, type VelocityMapping } from "./runner.ts";
+import { DEFAULT_PLAYBACK_DT, runPlayback } from "./runner.ts";
 import {
+  checkPositionContinuity,
   checkSettling,
   checkVelocityContinuity,
   DEFAULT_CONTINUITY,
   DEFAULT_SETTLING,
 } from "./timing-checks.ts";
 import { checkTraceGeometry } from "./trace-geometry.ts";
-import type { PlaybackStepFn, SpringConfig } from "./types.ts";
 
 export type PairPlaybackOptions = {
-  step: PlaybackStepFn;
-  morph: MorphFn;
   /** Starting spring config, auto-tuned against the timing checks before the final run. */
   base: SpringConfig;
-  mapVelocity?: VelocityMapping;
   /** Simulated seconds. Defaults to 3. */
   duration?: number;
   /** When the scripted retarget to `pair.interruptTo` happens. Defaults to 0.2 s. */
@@ -39,11 +35,8 @@ export function runPairPlayback(
   const interruption = {
     atTime: options.interruptAt ?? 0.2,
     to: parseIcon(loadFixture(pair.interruptTo)).contours,
-    ...(options.mapVelocity === undefined ? {} : { mapVelocity: options.mapVelocity }),
   };
   const playback = {
-    step: options.step,
-    morph: options.morph,
     from: parseIcon(loadFixture(pair.from)).contours,
     to: parseIcon(loadFixture(pair.to)).contours,
     duration: options.duration ?? 3,
@@ -55,7 +48,8 @@ export function runPairPlayback(
   const checks = [
     ...checkTraceGeometry(trace),
     checkSettling(trace, DEFAULT_SETTLING),
-    checkVelocityContinuity(trace, options.morph, DEFAULT_CONTINUITY),
+    checkVelocityContinuity(trace, DEFAULT_CONTINUITY),
+    checkPositionContinuity(trace),
   ];
   return {
     title: pair.name,

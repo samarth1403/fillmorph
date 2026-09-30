@@ -1,33 +1,33 @@
 import type { Contour } from "fillmorph";
 import { describe, expect, it } from "vitest";
-import type { MorphFn } from "../morph-fn.ts";
-import { naiveMorph } from "../morph-fn.ts";
 import { polygon, square } from "../test-shapes.ts";
 import { runPlayback } from "./runner.ts";
-import { dampedStubStep } from "./stub-steps.ts";
 import { checkTraceGeometry, traceFrames } from "./trace-geometry.ts";
 
 const config = { stiffness: 170, damping: 26, mass: 1 };
 
 describe("checkTraceGeometry", () => {
-  it("runs the deliverable #5 checks on every frame of a stub trace", () => {
-    // A MorphFn that self-intersects only after position 0.9, so only late frames can catch it.
+  it("runs the deliverable #5 checks on every frame of a trace", () => {
+    // A trace whose shape self-intersects only after position 0.9, so only late frames can
+    // catch it: a real run with those frames' contours swapped for a bowtie.
     const bowtie: Contour = polygon("c0", null, 0, [
       [10, 10],
       [90, 90],
       [90, 10],
       [10, 90],
     ]);
-    const lateBreak: MorphFn = (from, to, progress) =>
-      progress > 0.9 ? [bowtie] : naiveMorph(from, to, progress);
-    const broken = runPlayback({
-      step: dampedStubStep,
+    const clean = runPlayback({
       config,
-      morph: lateBreak,
       from: [square("c0", null, 0, 50, 50, 30)],
       to: [square("c0", null, 0, 50, 50, 40)],
       duration: 1,
     });
+    const broken = {
+      ...clean,
+      entries: clean.entries.map((entry) =>
+        entry.position > 0.9 ? { ...entry, contours: [bowtie] } : entry,
+      ),
+    };
 
     const [selfIntersection] = checkTraceGeometry(broken);
     const flagged = selfIntersection?.failures.flatMap((failure) => failure.frameIndices) ?? [];
@@ -42,11 +42,9 @@ describe("checkTraceGeometry", () => {
 
   it("judges hole monotonicity per leg, in progress order, catching an overshoot that inverts a closed hole", () => {
     // The hole shrinks to a point at progress 1; the lightly damped spring overshoots past 1,
-    // where the stub's lerp extrapolates the hole inside out and it grows again.
+    // where interpolate extrapolates the hole inside out and it grows again.
     const trace = runPlayback({
-      step: dampedStubStep,
       config: { stiffness: 170, damping: 8, mass: 1 },
-      morph: naiveMorph,
       from: [square("c0", null, 0, 50, 50, 40), square("c1", "c0", 1, 50, 50, 20)],
       to: [square("c0", null, 0, 50, 50, 40), square("c1", "c0", 1, 50, 50, 0)],
       duration: 3,
@@ -59,9 +57,7 @@ describe("checkTraceGeometry", () => {
 
   it("passes a critically damped version of the same collapse", () => {
     const trace = runPlayback({
-      step: dampedStubStep,
       config: { stiffness: 170, damping: 2 * Math.sqrt(170), mass: 1 },
-      morph: naiveMorph,
       from: [square("c0", null, 0, 50, 50, 40), square("c1", "c0", 1, 50, 50, 20)],
       to: [square("c0", null, 0, 50, 50, 40), square("c1", "c0", 1, 50, 50, 0)],
       duration: 3,

@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { naiveMorph } from "../morph-fn.ts";
+import type { Contour } from "fillmorph";
 import { square } from "../test-shapes.ts";
-import { runPlayback } from "./runner.ts";
-import { carryVelocity, dampedStubStep, resetVelocity, undampedStubStep } from "./stub-steps.ts";
-import { checkSettling, checkVelocityContinuity, DEFAULT_SETTLING } from "./timing-checks.ts";
+import { runPlayback, type VelocityMapping } from "./runner.ts";
+import {
+  checkPositionContinuity,
+  checkSettling,
+  checkVelocityContinuity,
+  DEFAULT_SETTLING,
+} from "./timing-checks.ts";
 
 // Leg 1 translates a square 40 units right. Wherever the interruption catches it, the retarget
 // (centered at 50, 90) is 40–45 units away, so carrying velocity keeps on-screen speed about equal.
@@ -11,18 +15,20 @@ const from = [square("c0", null, 0, 30, 50, 10)];
 const to = [square("c0", null, 0, 70, 50, 10)];
 const retargetTo = [square("c0", null, 0, 50, 90, 10)];
 const config = { stiffness: 170, damping: 26, mass: 1 };
-const base = { config, morph: naiveMorph, from, to, duration: 3 };
+const base = { config, from, to, duration: 3 };
+/** Fault injection: a retarget that drops the velocity, i.e. a visible snap. */
+const resetVelocity: VelocityMapping = () => 0;
 
 describe("checkSettling", () => {
-  it("passes a damped stand-in within the bound, and reports when it settled", () => {
-    const result = checkSettling(runPlayback({ ...base, step: dampedStubStep }));
+  it("passes a damped spring within the bound, and reports when it settled", () => {
+    const result = checkSettling(runPlayback(base));
     expect(result.passed).toBe(true);
     expect(result.settleTime).not.toBeNull();
     expect(result.settleTime).toBeLessThanOrEqual(DEFAULT_SETTLING.bound);
   });
 
-  it("flags an undamped stand-in that oscillates forever", () => {
-    const result = checkSettling(runPlayback({ ...base, step: undampedStubStep }));
+  it("flags an undamped spring that oscillates forever", () => {
+    const result = checkSettling(runPlayback({ ...base, config: { ...config, damping: 0 } }));
     expect(result.passed).toBe(false);
     expect(result.settleTime).toBeNull();
     expect(result.failures[0]?.message).toContain("never settled");
@@ -31,19 +37,13 @@ describe("checkSettling", () => {
   it("flags settling that happens, but later than the bound", () => {
     // Overdamped (ζ ≈ 1.6): its slow mode decays at ~1.9/s, reaching 1e-3 after ~3.7 s.
     const sluggish = { stiffness: 30, damping: 18, mass: 1 };
-    const result = checkSettling(
-      runPlayback({ ...base, config: sluggish, step: dampedStubStep, duration: 8 }),
-    );
+    const result = checkSettling(runPlayback({ ...base, config: sluggish, duration: 8 }));
     expect(result.passed).toBe(false);
     expect(result.failures[0]?.message).toContain("past the 2s bound");
   });
 
   it("measures from the final leg's start when the run was interrupted", () => {
-    const trace = runPlayback({
-      ...base,
-      step: dampedStubStep,
-      interruption: { atTime: 0.2, to: retargetTo },
-    });
+    const trace = runPlayback({ ...base, interruption: { atTime: 0.2, to: retargetTo } });
     const result = checkSettling(trace);
     expect(result.passed).toBe(true);
     // Independently: the first entry from which every later one is settled, in absolute time.
@@ -57,28 +57,28 @@ describe("checkSettling", () => {
   });
 
   it("fails when the trace is too short to verify the bound", () => {
-    const result = checkSettling(runPlayback({ ...base, step: dampedStubStep, duration: 1.5 }));
+    const result = checkSettling(runPlayback({ ...base, duration: 1.5 }));
     expect(result.passed).toBe(false);
     expect(result.failures.at(-1)?.message).toContain("can't be verified");
   });
 });
 
 describe("checkVelocityContinuity", () => {
-  const interrupted = (mapVelocity: typeof carryVelocity) =>
-    runPlayback({
-      ...base,
-      step: dampedStubStep,
-      interruption: { atTime: 0.2, to: retargetTo, mapVelocity },
-    });
-
-  it("passes a stand-in whose velocity carries over at the interruption", () => {
-    const result = checkVelocityContinuity(interrupted(carryVelocity), naiveMorph);
+  it("passes core's retarget, which carries velocity over at the interruption", () => {
+    const result = checkVelocityContinuity(
+      runPlayback({ ...base, interruption: { atTime: 0.2, to: retargetTo } }),
+    );
     expect(result.passed).toBe(true);
     expect(result.notes[0]).toMatch(/speed .* → .* units\/s/);
   });
 
-  it("flags a stand-in that resets velocity to zero at the interruption (a snap)", () => {
-    const result = checkVelocityContinuity(interrupted(resetVelocity), naiveMorph);
+  it("flags a retarget whose velocity is reset to zero (a snap), injected as a fault", () => {
+    const result = checkVelocityContinuity(
+      runPlayback({
+        ...base,
+        interruption: { atTime: 0.2, to: retargetTo, mapVelocity: resetVelocity },
+      }),
+    );
     expect(result.passed).toBe(false);
     expect(result.failures[0]?.message).toContain("on-screen speed jumps");
     expect(result.failures[0]?.frameIndices).toHaveLength(2);
@@ -88,19 +88,92 @@ describe("checkVelocityContinuity", () => {
     // Leg 1 moves 40 units per unit of progress; the retarget is ~160 units from the snapshot, so
     // carrying progress velocity unchanged makes the shape suddenly move ~4× faster on screen.
     const farther = [square("c0", null, 0, 50, 210, 10)];
-    const trace = runPlayback({
-      ...base,
-      step: dampedStubStep,
-      interruption: { atTime: 0.2, to: farther },
-    });
-    expect(checkVelocityContinuity(trace, naiveMorph).passed).toBe(false);
+    const trace = runPlayback({ ...base, interruption: { atTime: 0.2, to: farther } });
+    expect(checkVelocityContinuity(trace).passed).toBe(false);
   });
 
   it("passes with a note when the trace has no interruption", () => {
-    const result = checkVelocityContinuity(
-      runPlayback({ ...base, step: dampedStubStep }),
-      naiveMorph,
+    const result = checkVelocityContinuity(runPlayback(base));
+    expect(result.passed).toBe(true);
+    expect(result.notes).toEqual(["no interruption in this trace; nothing to check"]);
+  });
+});
+
+describe("checkPositionContinuity", () => {
+  const interrupted = (target = retargetTo) =>
+    runPlayback({ ...base, interruption: { atTime: 0.2, to: target } });
+
+  /** The trace with the new leg's first frame replaced, to forge a discontinuity. */
+  function withFirstFrameAfter(trace: ReturnType<typeof interrupted>, contours: Contour[]) {
+    const index = trace.entries.findIndex((entry) => entry.leg === 1);
+    return {
+      ...trace,
+      entries: trace.entries.map((entry, at) => (at === index ? { ...entry, contours } : entry)),
+    };
+  }
+
+  it("passes core's retarget: the same outline on both sides, to floating-point noise", () => {
+    const result = checkPositionContinuity(interrupted());
+    expect(result.passed).toBe(true);
+    expect(result.notes[0]).toMatch(/^t=0\.2s: outlines 0 units apart$/);
+  });
+
+  it("ignores an appearing hole's zero-area placeholder, which draws nothing", () => {
+    const ring = [square("c0", null, 0, 50, 90, 10), square("c1", "c0", 1, 50, 90, 4)];
+    const trace = interrupted(ring);
+    const firstAfter = trace.entries.find((entry) => entry.leg === 1);
+    expect(firstAfter?.contours.map((contour) => contour.id)).toEqual(["c0", "c1"]);
+    expect(checkPositionContinuity(trace).passed).toBe(true);
+  });
+
+  it("flags a new leg whose first frame is somewhere else, naming the time and the distance", () => {
+    const trace = interrupted();
+    const result = checkPositionContinuity(withFirstFrameAfter(trace, from));
+    expect(result.passed).toBe(false);
+    expect(result.failures[0]?.frameIndices).toHaveLength(2);
+    expect(result.failures[0]?.message).toMatch(
+      /^t=0\.2s: the new leg's first frame jumps away from the shape on screen — outlines [\d.]+ units apart at/,
     );
+  });
+
+  it("flags a new leg that starts from the wrong `from`, even when its first recorded frame looks right", () => {
+    // The old bug: the leg runs from the original icon, not the on-screen snapshot. The frame
+    // recorded at the retarget instant is still the snapshot; the jump shows on the next step.
+    const trace = interrupted();
+    const legs = trace.legs.map((leg) => (leg.index === 1 ? { ...leg, from } : leg));
+    const result = checkPositionContinuity({ ...trace, legs });
+    expect(result.passed).toBe(false);
+    expect(result.failures[0]?.message).toMatch(
+      /^t=0\.2s: the new leg's starting shape jumps away from the shape on screen/,
+    );
+  });
+
+  it("flags a jump just past the tolerance, and passes one just inside it", () => {
+    const trace = interrupted();
+    const before = trace.entries.filter((entry) => entry.time === trace.interruptions[0]?.time)[0];
+    const shifted = (offset: number): Contour[] =>
+      (before?.contours ?? []).map((contour) => ({
+        ...contour,
+        points: contour.points.map((point) => ({ x: point.x + offset, y: point.y })),
+      }));
+    expect(checkPositionContinuity(withFirstFrameAfter(trace, shifted(0.09))).passed).toBe(true);
+    expect(checkPositionContinuity(withFirstFrameAfter(trace, shifted(0.2))).passed).toBe(false);
+  });
+
+  it("flags a contour whose fill flips although its outline stays put", () => {
+    const trace = interrupted();
+    const before = trace.entries.filter((entry) => entry.time === trace.interruptions[0]?.time)[0];
+    const reversed = (before?.contours ?? []).map((contour) => ({
+      ...contour,
+      points: [...contour.points].reverse(),
+    }));
+    const result = checkPositionContinuity(withFirstFrameAfter(trace, reversed));
+    expect(result.passed).toBe(false);
+    expect(result.failures[0]?.message).toContain("fill flipped");
+  });
+
+  it("passes with a note when the trace has no interruption", () => {
+    const result = checkPositionContinuity(runPlayback(base));
     expect(result.passed).toBe(true);
     expect(result.notes).toEqual(["no interruption in this trace; nothing to check"]);
   });

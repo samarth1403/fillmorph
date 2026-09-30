@@ -1,6 +1,11 @@
-import type { Contour } from "fillmorph";
-import type { MorphFn } from "../morph-fn.ts";
-import type { PlaybackStepFn, SpringConfig, SpringState } from "./types.ts";
+import {
+  advanceMorph,
+  type Contour,
+  type MorphState,
+  retargetMorph,
+  type SpringConfig,
+  startMorph,
+} from "fillmorph";
 
 /** Default fixed time step: one 60 Hz display frame. */
 export const DEFAULT_PLAYBACK_DT = 1 / 60;
@@ -17,9 +22,9 @@ export type InterruptionContext = {
 };
 
 /**
- * Converts the old leg's exit velocity (old progress units per second) into the new leg's
- * starting velocity (new progress units per second). Spec 05 leaves the exact conversion to its
- * implementation; the runner's default is the identity.
+ * **Fault injection for the harness's own tests only:** replaces the new leg's starting velocity
+ * after core's `retargetMorph` has run (e.g. `resetVelocity`, to prove the continuity check
+ * catches a snap). The CLI never sets it, so reference-pair runs grade `retargetMorph` unchanged.
  */
 export type VelocityMapping = (velocity: number, context: InterruptionContext) => number;
 
@@ -32,9 +37,7 @@ export type ScriptedInterruption = {
 };
 
 export type PlaybackOptions = {
-  step: PlaybackStepFn;
   config: SpringConfig;
-  morph: MorphFn;
   from: Contour[];
   to: Contour[];
   /** Simulated seconds to run for. */
@@ -51,7 +54,7 @@ export type TraceEntry = {
   leg: number;
   position: number;
   velocity: number;
-  /** The `MorphFn`'s output for this leg at `position`. */
+  /** The shape on screen: the `MorphState`'s `contours` after this step. */
   contours: Contour[];
 };
 
@@ -77,13 +80,17 @@ export type PlaybackTrace = {
 };
 
 /**
- * Spec 03 deliverable #7's playback runner. It owns a simulated clock (a fixed `dt`, time
- * computed as `step × dt` so it never drifts, no real timers or `requestAnimationFrame`), the
- * loop, and the trace. Each leg's spring runs toward target 1.
+ * Spec 03 deliverable #7's playback runner. It runs **the same morph code a page runs**: core's
+ * `startMorph` / `advanceMorph` / `retargetMorph` (spec 05), which `fillmorph/dom`'s
+ * `createMorphDriver` also drives. So every rule being graded here (spring stepping,
+ * interpolation, settling on the exact target, and the retarget rule) is the shipped
+ * implementation, not a copy of it. What differs from the driver is only the scheduling: this
+ * runner owns a simulated clock (a fixed `dt`, time computed as `step × dt` so it never drifts, no
+ * real timers or `requestAnimationFrame`) where the driver uses animation-frame timestamps, and it
+ * records a trace.
  *
- * On a scripted interruption: the new leg's `from` is the on-screen snapshot, its position resets
- * to 0, and its velocity is the old velocity passed through `mapVelocity` (identity by default).
- * Same inputs always give an identical trace, provided `step` and `morph` are pure.
+ * A scripted interruption calls `retargetMorph` right after the step that reaches `atTime`; both
+ * sides are recorded at that time. Same inputs always give an identical trace.
  */
 export function runPlayback(options: PlaybackOptions): PlaybackTrace {
   const dt = options.dt ?? DEFAULT_PLAYBACK_DT;
@@ -101,31 +108,29 @@ export function runPlayback(options: PlaybackOptions): PlaybackTrace {
     );
   }
 
-  const legs: TraceLeg[] = [{ index: 0, startTime: 0, from: options.from, to: options.to }];
+  let state: MorphState = startMorph(options.from, options.to);
+  const legs: TraceLeg[] = [{ index: 0, startTime: 0, from: state.from, to: state.to }];
   const entries: TraceEntry[] = [];
   const interruptions: TraceInterruption[] = [];
-  let leg = legs[0] as TraceLeg;
-  let state: SpringState = { position: 0, velocity: 0 };
+  let legIndex = 0;
   let isInterruptionPending = interruption !== undefined;
 
-  const record = (time: number): TraceEntry => {
-    const entry: TraceEntry = {
+  const record = (time: number): void => {
+    entries.push({
       time,
-      leg: leg.index,
-      position: state.position,
-      velocity: state.velocity,
-      contours: options.morph(leg.from, leg.to, state.position),
-    };
-    entries.push(entry);
-    return entry;
+      leg: legIndex,
+      position: state.spring.position,
+      velocity: state.spring.velocity,
+      contours: state.contours,
+    });
   };
 
   record(0);
   const stepCount = Math.round(options.duration / dt);
   for (let stepIndex = 1; stepIndex <= stepCount; stepIndex++) {
     const time = stepIndex * dt;
-    state = options.step(state, options.config, 1, dt);
-    const entry = record(time);
+    state = advanceMorph(state, options.config, dt);
+    record(time);
 
     if (
       interruption !== undefined &&
@@ -133,27 +138,28 @@ export function runPlayback(options: PlaybackOptions): PlaybackTrace {
       time >= interruption.atTime - dt * 1e-6
     ) {
       isInterruptionPending = false;
+      const before = state;
+      state = retargetMorph(before, interruption.to);
       const context: InterruptionContext = {
-        position: state.position,
-        oldFrom: leg.from,
-        oldTo: leg.to,
-        snapshot: entry.contours,
+        position: before.spring.position,
+        oldFrom: before.from,
+        oldTo: before.to,
+        snapshot: before.contours,
         newTo: interruption.to,
       };
-      const velocityAfter = (interruption.mapVelocity ?? ((velocity) => velocity))(
-        state.velocity,
-        context,
-      );
+      if (interruption.mapVelocity !== undefined) {
+        const velocity = interruption.mapVelocity(before.spring.velocity, context);
+        state = { ...state, spring: { ...state.spring, velocity } };
+      }
       interruptions.push({
         time,
-        positionBefore: state.position,
-        velocityBefore: state.velocity,
-        velocityAfter,
+        positionBefore: before.spring.position,
+        velocityBefore: before.spring.velocity,
+        velocityAfter: state.spring.velocity,
         context,
       });
-      leg = { index: legs.length, startTime: time, from: entry.contours, to: interruption.to };
-      legs.push(leg);
-      state = { position: 0, velocity: velocityAfter };
+      legIndex++;
+      legs.push({ index: legIndex, startTime: time, from: state.from, to: state.to });
       record(time);
     }
   }

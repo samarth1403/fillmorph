@@ -6,7 +6,6 @@ import { DEFAULT_PROGRESS_STEPS, DENSE_PROGRESS_STEPS } from "./frames.ts";
 import { findPair, REFERENCE_PAIRS, type ReferencePair } from "./pairs.ts";
 import { renderPlaybackPage } from "./playback/playback-page.ts";
 import { runPairPlayback } from "./playback/run-pair-playback.ts";
-import { dampedStubStep } from "./playback/stub-steps.ts";
 import { renderRoundTripPage, runRoundTrip } from "./round-trip.ts";
 import { runPair } from "./run-pair.ts";
 
@@ -25,8 +24,8 @@ Other modes (can be combined with the above):
 
 Pages are written to harness/output/. Exit code 1 if any check fails.
 
-The MorphFn is spec 04's interpolate. Until spec 05 exists, the playback step function is a
-damped stand-in, so playback timing results say nothing about spec 05 yet.`;
+The frame grid's MorphFn is spec 04's interpolate. Playback runs spec 05's startMorph /
+advanceMorph / retargetMorph, the same core functions fillmorph/dom's driver runs.`;
 
 const OUTPUT_DIRECTORY = `${import.meta.dirname}/output`;
 
@@ -107,8 +106,7 @@ function main(args: readonly string[]): number {
     const playbackPairs = selected.length > 0 ? selected : REFERENCE_PAIRS;
     const sections = playbackPairs.map((pair) =>
       runPairPlayback(pair, {
-        step: dampedStubStep,
-        morph: interpolate,
+        // fillmorph/dom's default config (not importable here: the harness grades core only).
         base: { stiffness: 170, damping: 26, mass: 1 },
       }),
     );
@@ -121,7 +119,7 @@ function main(args: readonly string[]): number {
       isFailing ||= !passed;
     }
     const lede =
-      "Step function: dampedStubStep (a stand-in until spec 05's stepSpring). MorphFn: interpolate (spec 04). " +
+      "Playback runs spec 05's startMorph / advanceMorph / retargetMorph — the same core code fillmorph/dom's createMorphDriver runs — on a simulated 60 Hz clock. " +
       "Each pair is interrupted mid-flight and retargeted to a third icon; the playback replays the recorded simulated frames.";
     console.log(`→ ${writeOutput("playback.html", renderPlaybackPage(sections, lede))}`);
   }

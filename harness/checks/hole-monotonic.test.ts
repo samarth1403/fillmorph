@@ -87,6 +87,59 @@ describe("checkHoleMonotonic", () => {
     expect(result.failures[0]?.message).toContain("p=0.5: hole c1 is missing");
   });
 
+  it("passes a hole that collapses to a point and then leaves the sequence for good, and says so", () => {
+    // What a settled morph does: the zero-area placeholder is replaced by the exact target.
+    const result = checkHoleMonotonic([
+      withHole(0, 400),
+      withHole(0.5, 100),
+      withHole(0.999, 0),
+      frame(1, [outer]),
+      frame(1, [outer]),
+    ]);
+    expect(result.passed).toBe(true);
+    expect(result.notes).toEqual(["hole c1 collapsed to a point, then left the sequence from p=1"]);
+  });
+
+  it("flags a hole that leaves the sequence before it has collapsed", () => {
+    const result = checkHoleMonotonic([withHole(0, 400), withHole(0.5, 100), frame(1, [outer])]);
+    expect(result.passed).toBe(false);
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]?.frameIndices).toEqual([2]);
+    expect(result.failures[0]?.message).toContain(
+      "p=1: hole c1 is missing from this frame, before it had collapsed to a point",
+    );
+  });
+
+  it("flags a collapsed hole that leaves and then comes back", () => {
+    const result = checkHoleMonotonic([
+      withHole(0, 400),
+      withHole(0.5, 0),
+      frame(0.75, [outer]),
+      withHole(1, 0),
+    ]);
+    expect(result.passed).toBe(false);
+    expect(result.failures[0]?.message).toContain("p=0.75: hole c1 is missing");
+  });
+
+  it("flags a hole missing before it first appears", () => {
+    const result = checkHoleMonotonic([frame(0, [outer]), withHole(0.5, 0), withHole(1, 400)]);
+    expect(result.passed).toBe(false);
+    expect(result.failures[0]?.frameIndices).toEqual([0]);
+  });
+
+  it("still judges the area of a hole that left: a regrowth before it collapsed is flagged", () => {
+    const result = checkHoleMonotonic([
+      withHole(0, 400),
+      withHole(0.25, 100),
+      withHole(0.5, 200),
+      withHole(0.75, 0),
+      frame(1, [outer]),
+    ]);
+    expect(result.passed).toBe(false);
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]?.message).toContain("grows from 100 to 200");
+  });
+
   it("judges frames in progress order, not the order they were given in", () => {
     const shuffled = [withHole(1, 0), withHole(0, 400), withHole(0.5, 200)];
     expect(checkHoleMonotonic(shuffled).passed).toBe(true);

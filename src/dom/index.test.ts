@@ -5,4 +5,9 @@ describe("fillmorph/dom", () => {
     const dom = await import("./index");
     expect(dom).toBeTypeOf("object");
   });
+
+  it("exposes only the morph driver at runtime", async () => {
+    const dom = await import("./index");
+    expect(Object.keys(dom).sort()).toEqual(["createMorphDriver"]);
+  });
 });

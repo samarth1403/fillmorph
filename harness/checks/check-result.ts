@@ -3,7 +3,8 @@ export type CheckName =
   | "hole-monotonic"
   | "containment"
   | "settling"
-  | "velocity-continuity";
+  | "velocity-continuity"
+  | "position-continuity";
 
 /** One thing a check found wrong. */
 export type CheckFailure = {

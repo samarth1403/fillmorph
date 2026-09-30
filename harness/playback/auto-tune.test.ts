@@ -1,14 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { naiveMorph } from "../morph-fn.ts";
 import { square } from "../test-shapes.ts";
 import { autoTuneSpring } from "./auto-tune.ts";
 import { runPlayback } from "./runner.ts";
-import { dampedStubStep, undampedStubStep } from "./stub-steps.ts";
 import { checkSettling, checkVelocityContinuity } from "./timing-checks.ts";
 
 const playback = {
-  step: dampedStubStep,
-  morph: naiveMorph,
   from: [square("c0", null, 0, 30, 50, 10)],
   to: [square("c0", null, 0, 70, 50, 10)],
   duration: 3,
@@ -23,7 +19,7 @@ describe("autoTuneSpring", () => {
     expect(result.candidates).toHaveLength(1);
   });
 
-  it("runs end to end on a stand-in and returns a config that passes the settling check", () => {
+  it("runs end to end and returns a config that passes the settling check", () => {
     const result = autoTuneSpring({ base: { stiffness: 170, damping: 0, mass: 1 }, playback });
     expect(result.baseConfigPassed).toBe(false);
     expect(result.config).not.toBeNull();
@@ -32,7 +28,7 @@ describe("autoTuneSpring", () => {
       config: result.config ?? { stiffness: 0, damping: 0, mass: 1 },
     });
     expect(checkSettling(trace).passed).toBe(true);
-    expect(checkVelocityContinuity(trace, naiveMorph).passed).toBe(true);
+    expect(checkVelocityContinuity(trace).passed).toBe(true);
   });
 
   it("keeps the mass and picks the passing candidate closest to the starting config", () => {
@@ -48,9 +44,10 @@ describe("autoTuneSpring", () => {
   });
 
   it("returns null, not a failing config, when no candidate passes", () => {
+    // No stiffness/damping on the grid can settle within the bound in a run this short.
     const result = autoTuneSpring({
       base: { stiffness: 170, damping: 26, mass: 1 },
-      playback: { ...playback, step: undampedStubStep },
+      playback: { ...playback, duration: 1 },
     });
     expect(result.config).toBeNull();
     expect(result.candidates.every((candidate) => !candidate.passed)).toBe(true);

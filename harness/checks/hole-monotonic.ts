@@ -20,7 +20,14 @@ const AREA_NOISE_RATIO = 1e-9;
  *   shape changes with progress; the order they were sampled or played in doesn't matter.
  * - A hole id present in some frame but missing (or no longer a hole) in another is a failure
  *   naming the id and the frame where it's missing — a hole vanishing between frames is itself a
- *   discontinuity. Such a hole's area isn't judged further.
+ *   discontinuity. Such a hole's area isn't judged further. **One exception** (spec 03 #5, as
+ *   reopened for spec 05's settle rule): a hole may *leave* the sequence — be missing from every
+ *   frame after some point, in progress order, and never return — once it has fully collapsed,
+ *   i.e. its area in the last frame it's present in is at most `COLLAPSED_AREA_RATIO` of its
+ *   largest. That is what a settled morph does when it swaps the zero-area placeholder of a
+ *   vanished hole for the exact target shape. Leaving before collapsing, reappearing after going
+ *   missing, or being missing before first appearing all stay failures, and the frames where the
+ *   hole is present are still judged for monotonicity below.
  * - A hole that collapses to a point or grows from one (its area is ~0 in some frame) must change
  *   area monotonically across the whole sequence: shrinking if it reaches the point after its
  *   largest frame, growing if before. Each step that reverses direction is flagged with its
@@ -46,24 +53,42 @@ export function checkHoleMonotonic(frames: readonly Frame[]): CheckResult {
   const notes: string[] = [];
   for (const id of holeIds) {
     const track: { area: number; index: number; frame: Frame }[] = [];
-    let isMissing = false;
+    const missing: { index: number; frame: Frame }[] = [];
+    let isReturning = false;
     for (const { frame, index } of order) {
       const hole = frame.contours.find((contour) => contour.id === id && contour.isHole);
       if (hole === undefined) {
-        isMissing = true;
-        failures.push({
-          frameIndices: [index],
-          contourId: id,
-          message: `${frame.label}: hole ${id} is missing from this frame, so it can't be tracked across the sequence`,
-        });
+        missing.push({ index, frame });
         continue;
       }
+      if (missing.length > 0) isReturning = true;
       track.push({ area: polygonArea(hole.points), index, frame });
     }
-    if (isMissing || track.length < 2) continue;
 
     const areas = track.map((entry) => entry.area);
-    const largest = Math.max(...areas);
+    const largest = Math.max(0, ...areas);
+    if (missing.length > 0) {
+      const lastArea = areas[areas.length - 1] ?? Number.POSITIVE_INFINITY;
+      const hasLeftCollapsed =
+        !isReturning && track.length > 0 && lastArea <= largest * COLLAPSED_AREA_RATIO;
+      if (!hasLeftCollapsed) {
+        const reason = isReturning
+          ? "so it can't be tracked across the sequence"
+          : "before it had collapsed to a point";
+        for (const { index, frame } of missing) {
+          failures.push({
+            frameIndices: [index],
+            contourId: id,
+            message: `${frame.label}: hole ${id} is missing from this frame, ${reason}`,
+          });
+        }
+        continue;
+      }
+      notes.push(
+        `hole ${id} collapsed to a point, then left the sequence from ${(missing[0] as (typeof missing)[number]).frame.label}`,
+      );
+    }
+    if (track.length < 2) continue;
     if (largest === 0) continue;
     const pointIndex = areas.findIndex((area) => area <= largest * COLLAPSED_AREA_RATIO);
     if (pointIndex === -1) {

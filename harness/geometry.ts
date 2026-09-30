@@ -7,15 +7,23 @@ import type { Point } from "fillmorph";
  */
 const ORIENTATION_EPSILON = 1e-10;
 
-/** Unsigned shoelace area of a closed polygon (closing edge implicit). */
-export function polygonArea(points: readonly Point[]): number {
+/**
+ * Signed shoelace area of a closed polygon (closing edge implicit). In SVG's y-down frame it's
+ * negative for a parsed outer contour (counter-clockwise on screen) and positive for a hole.
+ */
+export function signedPolygonArea(points: readonly Point[]): number {
   let twiceArea = 0;
   for (let index = 0; index < points.length; index++) {
     const a = points[index] as Point;
     const b = points[(index + 1) % points.length] as Point;
     twiceArea += a.x * b.y - b.x * a.y;
   }
-  return Math.abs(twiceArea) / 2;
+  return twiceArea / 2;
+}
+
+/** Unsigned shoelace area of a closed polygon (closing edge implicit). */
+export function polygonArea(points: readonly Point[]): number {
+  return Math.abs(signedPolygonArea(points));
 }
 
 function orientation(origin: Point, a: Point, b: Point): number {
