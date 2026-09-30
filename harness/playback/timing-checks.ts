@@ -105,39 +105,97 @@ export type ContinuityOptions = {
   restSpeed: number;
 };
 
-/** Starting values, tunable. */
-export const DEFAULT_CONTINUITY: ContinuityOptions = { maxSpeedRatio: 1.5, restSpeed: 1e-3 };
+/**
+ * `maxSpeedRatio` 1.5 is on the visible speed `visibleRate` measures (briefly 1.8 during spec 07
+ * while the check still measured raw vertex speed; that was rejected and the metric fixed).
+ *
+ * `restSpeed` 1 canonical unit/s is the settling rule's velocity tolerance (1e-2 progress units
+ * per second, `DEFAULT_SETTLING.velocityTolerance`, the same as spec 05's own settle rule) on a
+ * leg that moves the outline across the whole 100-unit canonical frame per unit of progress, about
+ * the most a leg inside the frame can. Below it on both sides, the settle rule would already call
+ * the spring at rest on any such leg, so the ratio of the two speeds carries no information (it
+ * was 1e-3 until spec 05's second reopen).
+ */
+export const DEFAULT_CONTINUITY: ContinuityOptions = { maxSpeedRatio: 1.5, restSpeed: 1 };
 
 /** Step for the numerical derivative of `interpolate` with respect to progress. */
 const DERIVATIVE_STEP = 1e-4;
 
 /**
- * Root-mean-square speed of every vertex, in canonical units per progress unit, of `interpolate(from,
- * to, ·)` at `progress`. Null when the two samples don't share a structure (ids and point counts),
- * since vertices can't then be paired.
+ * How fast the drawn outline moves between two frames `before` and `after` taken around `now`:
+ * the root-mean-square of each vertex's displacement **perpendicular to the outline** (the
+ * outline's direction taken at `now`), weighted by the length of outline that vertex stands for
+ * (half of each adjacent edge). The caller divides by the time or progress between the frames.
+ *
+ * - **Why perpendicular:** a vertex sliding *along* the outline redraws the same shape, so it
+ *   can't be seen. Only motion across the outline changes what's on screen. Raw vertex speed
+ *   counts both, so it depends on how the morph lays points out: spec 04's index pairing slid
+ *   points a lot, spec 07's arc-length pairing barely does, and raw speed moved with it while the
+ *   picture didn't.
+ * - **Why weighted by length:** the outline is what's drawn, not the vertices. Without weights, a
+ *   stretch crowded with points (a tight curve after flattening) would count for more than the
+ *   same length of straight edge.
+ * - **Zero-length contours** (a collapsed or not-yet-grown placeholder) draw nothing at that
+ *   instant and have no direction to be perpendicular to, so they weigh nothing. With nothing
+ *   drawn at all, the result is 0.
+ *
+ * Null when the three frames don't share a structure (ids and point counts), since vertices can't
+ * then be paired.
  */
-function shapeRate(from: Contour[], to: Contour[], progress: number): number | null {
-  const before = interpolate(from, to, progress - DERIVATIVE_STEP);
-  const after = interpolate(from, to, progress + DERIVATIVE_STEP);
-  if (before.length !== after.length) return null;
-  let sumOfSquares = 0;
-  let count = 0;
-  for (const [index, contour] of before.entries()) {
-    const other = after[index] as Contour;
-    if (other.id !== contour.id || other.points.length !== contour.points.length) return null;
-    for (const [pointIndex, point] of contour.points.entries()) {
-      const moved = other.points[pointIndex] as Point;
-      sumOfSquares += (moved.x - point.x) ** 2 + (moved.y - point.y) ** 2;
-      count++;
+export function outlineDisplacement(
+  before: readonly Contour[],
+  now: readonly Contour[],
+  after: readonly Contour[],
+): number | null {
+  if (before.length !== now.length || after.length !== now.length) return null;
+  let weightedSquares = 0;
+  let totalLength = 0;
+  for (const [index, contour] of now.entries()) {
+    const earlier = before[index] as Contour;
+    const later = after[index] as Contour;
+    const points = contour.points;
+    if (earlier.id !== contour.id || later.id !== contour.id) return null;
+    if (earlier.points.length !== points.length || later.points.length !== points.length) {
+      return null;
+    }
+    for (const [pointIndex, point] of points.entries()) {
+      const previous = points[(pointIndex - 1 + points.length) % points.length] as Point;
+      const next = points[(pointIndex + 1) % points.length] as Point;
+      const tangentX = next.x - previous.x;
+      const tangentY = next.y - previous.y;
+      const tangentLength = Math.hypot(tangentX, tangentY);
+      const weight =
+        (Math.hypot(point.x - previous.x, point.y - previous.y) +
+          Math.hypot(next.x - point.x, next.y - point.y)) /
+        2;
+      if (tangentLength === 0 || weight === 0) continue;
+      const start = earlier.points[pointIndex] as Point;
+      const end = later.points[pointIndex] as Point;
+      const across = ((end.x - start.x) * -tangentY + (end.y - start.y) * tangentX) / tangentLength;
+      weightedSquares += weight * across * across;
+      totalLength += weight;
     }
   }
-  if (count === 0) return 0;
-  return Math.sqrt(sumOfSquares / count) / (2 * DERIVATIVE_STEP);
+  return totalLength === 0 ? 0 : Math.sqrt(weightedSquares / totalLength);
+}
+
+/**
+ * `outlineDisplacement` of `interpolate(from, to, ·)` around `progress`, per unit of progress: how
+ * fast this leg visibly moves the shape for each unit its spring advances.
+ */
+function visibleRate(from: Contour[], to: Contour[], progress: number): number | null {
+  const displacement = outlineDisplacement(
+    interpolate(from, to, progress - DERIVATIVE_STEP),
+    interpolate(from, to, progress),
+    interpolate(from, to, progress + DERIVATIVE_STEP),
+  );
+  return displacement === null ? null : displacement / (2 * DERIVATIVE_STEP);
 }
 
 /**
  * Deliverable #7 velocity-continuity check: at each interruption, the shape's on-screen speed
- * (RMS vertex speed, canonical units per second) just before and just after the retarget must
+ * (visible outline speed, canonical units per second; see `outlineDisplacement`) just before and
+ * just after the retarget must
  * agree within `maxSpeedRatio`. Speed = |velocity| × how fast the leg's geometry moves per unit
  * of progress, so it's measured in the same units on both sides even though each leg has its own
  * progress space — this is what lets it judge spec 05's velocity conversion, not just compare two
@@ -164,8 +222,8 @@ export function checkVelocityContinuity(
       .filter(({ entry }) => entry.time === interruption.time)
       .map(({ index }) => index);
     const at = `t=${formatNumber(interruption.time)}s`;
-    const rateBefore = shapeRate(context.oldFrom, context.oldTo, context.position);
-    const rateAfter = shapeRate(context.snapshot, context.newTo, 0);
+    const rateBefore = visibleRate(context.oldFrom, context.oldTo, context.position);
+    const rateAfter = visibleRate(context.snapshot, context.newTo, 0);
     if (rateBefore === null || rateAfter === null) {
       failures.push({
         frameIndices,

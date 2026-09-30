@@ -2,13 +2,20 @@ import { describe, expect, it } from "vitest";
 import type { Point } from "../contour";
 import { parseIcon } from "../parse/parse-icon";
 import { FA_SOLID_HEART } from "../parse/test-fixtures";
-import { findBestRotation, rotatePoints, rotationCost } from "./align-rotation";
+import { findBestRotation, rotationCost } from "./align-rotation";
+import { sampleEvenly } from "./arc-length";
 import { matchContours } from "./match-contours";
 import { collapsedPartner } from "./placeholder";
-import { resamplePolygon, sharedPointCount } from "./reconcile-density";
-import { FA_REGULAR_HEART, mulberry32, randomPolygon, rectangle } from "./test-helpers";
+import { sharedPointCount } from "./reconcile-density";
+import {
+  FA_REGULAR_HEART,
+  mulberry32,
+  randomPolygon,
+  rectangle,
+  rotatePoints,
+} from "./test-helpers";
 
-describe("rotatePoints", () => {
+describe("rotatePoints (test helper)", () => {
   it("moves index (i + k) mod N to index i", () => {
     const points = rectangle(0, 0, 1, 1);
     expect(rotatePoints(points, 1)).toEqual([points[1], points[2], points[3], points[0]]);
@@ -32,17 +39,43 @@ describe("rotationCost", () => {
 });
 
 describe("findBestRotation", () => {
-  it("recovers a known rotation exactly (property, 200 random polygons)", () => {
+  it("recovers a known rotation exactly on evenly spaced samples (property, 200 random polygons)", () => {
     const random = mulberry32(21);
     for (let run = 0; run < 200; run++) {
-      const points = randomPolygon(random, 3 + Math.floor(random() * 80), { x: 50, y: 50 });
-      const offset = Math.floor(random() * points.length);
-      // `to` is `from` started `offset` points later, so pairing from[i] with to[i + k] is exact
-      // when k = N − offset.
+      const polygon = randomPolygon(random, 3 + Math.floor(random() * 80), { x: 50, y: 50 });
+      const count = sharedPointCount(polygon.length, polygon.length);
+      const points = sampleEvenly(polygon, count);
+      const offset = Math.floor(random() * count);
+      // `to` is the same outline sampled from `offset` samples later, so pairing from[i] with
+      // to[i + k] is exact when k = N − offset.
       const to = rotatePoints(points, offset);
-      const expected = (points.length - offset) % points.length;
+      const expected = (count - offset) % count;
       expect(findBestRotation(points, to)).toBe(expected);
       expect(rotationCost(points, to, expected)).toBe(0);
+    }
+  });
+
+  it("finds the arc-length shift of a contour started at another vertex, to within one sample", () => {
+    const random = mulberry32(24);
+    for (let run = 0; run < 100; run++) {
+      const polygon = randomPolygon(random, 10 + Math.floor(random() * 70), { x: 50, y: 50 });
+      const start = 1 + Math.floor(random() * (polygon.length - 1));
+      const restarted = rotatePoints(polygon, start);
+      const count = sharedPointCount(polygon.length, restarted.length);
+      const offset = findBestRotation(sampleEvenly(polygon, count), sampleEvenly(restarted, count));
+
+      // `restarted` begins `startFraction` of the way round `polygon`, so `polygon`'s fraction s
+      // is `restarted`'s s − startFraction: the ideal shift is 1 − startFraction.
+      let walked = 0;
+      let total = 0;
+      for (const [index, a] of polygon.entries()) {
+        const b = polygon[(index + 1) % polygon.length] as Point;
+        if (index < start) walked += Math.hypot(b.x - a.x, b.y - a.y);
+        total += Math.hypot(b.x - a.x, b.y - a.y);
+      }
+      const ideal = 1 - walked / total;
+      const gap = Math.abs(offset / count - ideal);
+      expect(Math.min(gap, 1 - gap)).toBeLessThanOrEqual(1 / count);
     }
   });
 
@@ -59,8 +92,10 @@ describe("findBestRotation", () => {
   it("resolves a placeholder partner to k = 0, on either side", () => {
     const random = mulberry32(23);
     for (let run = 0; run < 50; run++) {
-      const points = randomPolygon(random, 3 + Math.floor(random() * 80), { x: 50, y: 50 });
-      const placeholder = collapsedPartner(points);
+      const polygon = randomPolygon(random, 3 + Math.floor(random() * 80), { x: 50, y: 50 });
+      const count = sharedPointCount(polygon.length, polygon.length);
+      const points = sampleEvenly(polygon, count);
+      const placeholder = sampleEvenly(collapsedPartner(polygon), count);
       expect(findBestRotation(points, placeholder)).toBe(0);
       expect(findBestRotation(placeholder, points)).toBe(0);
     }
@@ -78,8 +113,9 @@ describe("findBestRotation", () => {
   });
 
   it("aligns FA Regular heart → FA Solid heart: non-zero offset, far less travel than k = 0", () => {
-    // Spec 04's acceptance criterion. Spec 02 starts the regular heart's outline at its right
-    // lobe's top and the solid heart's at its left lobe's, so k = 0 pairs them half a shape apart.
+    // Spec 04's acceptance criterion, re-pinned for spec 07's evenly spaced samples. Spec 02
+    // starts the regular heart's outline at its right lobe's top and the solid heart's at its
+    // left lobe's, so k = 0 pairs them half a shape apart.
     const from = parseIcon(FA_REGULAR_HEART).contours;
     const to = parseIcon(FA_SOLID_HEART).contours;
     const [outer] = matchContours(from, to).matched;
@@ -87,17 +123,18 @@ describe("findBestRotation", () => {
     expect(outer.from.isHole || outer.to.isHole).toBe(false);
 
     const count = sharedPointCount(outer.from.points.length, outer.to.points.length);
-    const fromPoints = resamplePolygon(outer.from.points, count);
-    const toPoints = resamplePolygon(outer.to.points, count);
+    const fromPoints = sampleEvenly(outer.from.points, count);
+    const toPoints = sampleEvenly(outer.to.points, count);
     const offset = findBestRotation(fromPoints, toPoints);
     const naiveCost = rotationCost(fromPoints, toPoints, 0);
     const alignedCost = rotationCost(fromPoints, toPoints, offset);
 
-    // Recorded in progress-tracker.md: N = 82, k = 66, 4241.98 → 100.14 canonical units.
+    // Recorded in progress-tracker.md: N = 82, k = 68, 3718.88 → 44.93 canonical units. (Spec
+    // 04's vertex-keeping samples gave k = 66, 4241.98 → 100.14.)
     expect(count).toBe(82);
-    expect(offset).toBe(66);
-    expect(naiveCost).toBeCloseTo(4241.98, 1);
-    expect(alignedCost).toBeCloseTo(100.14, 1);
+    expect(offset).toBe(68);
+    expect(naiveCost).toBeCloseTo(3718.88, 1);
+    expect(alignedCost).toBeCloseTo(44.93, 1);
     expect(offset).not.toBe(0);
     expect(alignedCost).toBeLessThan(naiveCost / 10);
   });

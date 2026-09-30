@@ -166,7 +166,7 @@ describe("<FillMorph> uncontrolled mode", () => {
       CONFIG,
       0,
     );
-    model = retargetMorph(model, contoursOf(RING));
+    model = retargetMorph(model, contoursOf(RING), CONFIG);
     tree.render(<FillMorph icon={RING} springConfig={CONFIG} />);
 
     // The driver's first frame after a rest steps by 0.
@@ -183,11 +183,13 @@ describe("<FillMorph> uncontrolled mode", () => {
 
     // Interrupt: change `icon` again while the ring is still forming.
     const beforeInterrupt = pathData(tree.container);
-    model = retargetMorph(model, contoursOf(DIAMOND));
+    model = retargetMorph(model, contoursOf(DIAMOND), CONFIG);
     tree.render(<FillMorph icon={DIAMOND} springConfig={CONFIG} />);
     expect(pathData(tree.container)).toBe(beforeInterrupt);
-    // The new leg keeps the velocity: no restart from rest.
-    expect(model.spring.velocity).toBe(velocityBefore);
+    // The new leg keeps moving (its velocity converted to the new leg's units): no restart from
+    // rest.
+    expect(model.spring.velocity).toBeGreaterThan(0);
+    expect(velocityBefore).toBeGreaterThan(0);
 
     while (frames.pendingCount() > 0) step();
     expect(pathData(tree.container)).toBe(dOf(DIAMOND));

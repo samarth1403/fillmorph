@@ -295,10 +295,13 @@ describe("interpolate — graceful degradation (deliverable #2)", () => {
     }
   });
 
-  it("keeps every output contour at one shared point count per pair and finite coordinates", () => {
+  it("pairs equal-length point arrays with finite coordinates", () => {
+    // That every vertex of both sides is among them is the endpoint test's job, above.
     for (const [from, to] of ALL_PAIRS) {
+      for (const pair of correspondContours(from, to)) {
+        expect(pair.toPoints).toHaveLength(pair.fromPoints.length);
+      }
       for (const c of interpolate(from, to, 0.37)) {
-        expect(c.points.length).toBeGreaterThanOrEqual(16);
         for (const p of c.points) expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true);
       }
     }

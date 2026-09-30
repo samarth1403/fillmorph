@@ -1,9 +1,8 @@
 import type { Contour, Point } from "../contour";
-import { findBestRotation, rotatePoints } from "./align-rotation";
 import { centroidOf } from "./centroid";
 import { matchContours } from "./match-contours";
+import { pairByArcLength } from "./pair-by-arc-length";
 import { collapsedPartner } from "./placeholder";
-import { resamplePolygon, sharedPointCount } from "./reconcile-density";
 
 /**
  * Where an unmatched contour collapses to (or grows from), when that point has to move with the
@@ -35,7 +34,8 @@ export type ContourCorrespondence = {
 
 /**
  * Runs spec 04 deliverables #1–#4 on two contour trees: match structure, give unmatched contours
- * a collapsed partner, reconcile each pair's point count, then align rotation and pair by index.
+ * a collapsed partner, then pair each pair's points by arc-length position after aligning
+ * rotation (spec 07, which replaced #4's index pairing; see `pairByArcLength`).
  *
  * The output tree (`id`/`parentId`/`isHole`/`depth`) is `to`'s own tree, plus the contours that
  * disappear:
@@ -49,8 +49,9 @@ export type ContourCorrespondence = {
  *
  * Each unmatched contour is anchored to its nearest ancestor that has a partner, walking past
  * unmatched parents (deliverable #2); see `CollapseAnchor`. Its placeholder arrays hold its own
- * centroid, which is what it collapses to when no such ancestor exists; with a single point
- * repeated, #3's resampling and #4's rotation search leave it unchanged either way.
+ * centroid, which is what it collapses to when no such ancestor exists; being a single point
+ * repeated, it has no perimeter, so the rotation search picks k = 0 and its partner's vertices set
+ * the pair's points either way.
  */
 export function correspondContours(
   from: readonly Contour[],
@@ -126,17 +127,12 @@ function correspond(
   toPoints: readonly Point[],
   anchor: CollapseAnchor | null,
 ): ContourCorrespondence {
-  const count = sharedPointCount(fromPoints.length, toPoints.length);
-  const fromResampled = resamplePolygon(fromPoints, count);
-  const toResampled = resamplePolygon(toPoints, count);
-  const offset = findBestRotation(fromResampled, toResampled);
   return {
     id,
     parentId,
     isHole: structure.isHole,
     depth: structure.depth,
-    fromPoints: fromResampled,
-    toPoints: rotatePoints(toResampled, offset),
+    ...pairByArcLength(fromPoints, toPoints),
     anchor,
   };
 }
@@ -158,10 +154,10 @@ function lerpPoints(from: readonly Point[], to: readonly Point[], t: number): Po
  * The geometry of a morph from `from` to `to` at `progress`: 0 is `from`, 1 is `to`. This is the
  * real implementation of spec 03's `MorphFn` interface (spec 04 deliverable #6).
  *
- * Internally (spec 04 deliverables #1–#5): contours are matched by structure (parent and
- * centroid order); a contour with no partner collapses to, or grows from, a point; each pair is
- * resampled to a shared point count; the pair's rotation is aligned to minimize point travel;
- * then every point is interpolated linearly. See `correspondContours` for the output tree's
+ * Internally (spec 04 deliverables #1–#5, with spec 07's pairing): contours are matched by
+ * structure (parent and centroid order); a contour with no partner collapses to, or grows from, a
+ * point; the pair's rotation is aligned to minimize point travel; points are paired by arc-length
+ * position around each outline; then every point is interpolated linearly. See `correspondContours` for the output tree's
  * `id`/`parentId` rule: it's `to`'s tree plus the disappearing contours, and the same for every
  * progress value.
  *
@@ -178,8 +174,9 @@ function lerpPoints(from: readonly Point[], to: readonly Point[], t: number): Po
  * - **Progress** must be finite, or it throws `RangeError`. Values outside 0…1 extrapolate
  *   linearly, which a spring overshoot relies on. A collapsing contour extrapolated past 1 turns
  *   through its collapse point and regrows mirrored, so callers that overshoot should expect that.
- * - **Output:** at progress 1 every `to` contour's outline is exactly the parsed one (points may
- *   start at a different index, and extra points lie on its edges). Disappearing contours are
+ * - **Output:** at progress 0 and 1 every contour's outline is exactly the input one: each input
+ *   vertex is present at its exact position, in order (a `to` contour may start at a different
+ *   index), and extra points lie on its edges. Disappearing contours are
  *   still present as zero-area point contours, so a hole's id never vanishes mid-sequence.
  */
 export function interpolate(from: Contour[], to: Contour[], progress: number): Contour[] {

@@ -139,7 +139,7 @@ export function runPlayback(options: PlaybackOptions): PlaybackTrace {
     ) {
       isInterruptionPending = false;
       const before = state;
-      state = retargetMorph(before, interruption.to);
+      state = retargetMorph(before, interruption.to, options.config);
       const context: InterruptionContext = {
         position: before.spring.position,
         oldFrom: before.from,

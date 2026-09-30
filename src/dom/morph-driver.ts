@@ -22,7 +22,8 @@ export type MorphListener = (contours: Contour[]) => void;
 export type MorphDriver = {
   /**
    * Starts a new leg toward `to` from whatever shape is on screen now, carrying the current
-   * velocity, so an in-flight morph turns toward the new target without a snap or a pause. Works
+   * on-screen speed over (core's `retargetMorph` converts the velocity), so an in-flight morph
+   * turns toward the new target without a snap, a pause or a sudden speed-up. Works
    * the same on a settled or stopped driver (then from rest). Throws, before changing anything,
    * if `to` isn't a coherent contour tree (see `interpolate`).
    */
@@ -90,7 +91,7 @@ export function createMorphDriver(
 
   return {
     retarget(newTo) {
-      state = retargetMorph(state, newTo);
+      state = retargetMorph(state, newTo, config);
       if (frameId === null) frameId = requestAnimationFrame(frame);
     },
     subscribe(listener) {

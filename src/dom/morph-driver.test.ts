@@ -118,7 +118,7 @@ describe("createMorphDriver", () => {
       expect(emitted.at(-1)).toEqual(expected.contours);
     }
     driver.retarget(square(0, 100));
-    expected = retargetMorph(expected, square(0, 100));
+    expected = retargetMorph(expected, square(0, 100), CONFIG);
     for (let index = 13; frames.pendingCount() > 0; index++) {
       frames.frame(index * 16);
       expected = advanceMorph(expected, CONFIG, 0.016);
@@ -192,7 +192,7 @@ describe("createMorphDriver", () => {
       return time;
     }
 
-    it("starts the new leg from the on-screen snapshot, with velocity carried over", () => {
+    it("starts the new leg from the on-screen snapshot, with its visible speed carried over", () => {
       const driver = createMorphDriver(FROM, TO, CONFIG);
       const emitted = record(driver);
       let time = runTo(0.4, emitted);
@@ -210,14 +210,19 @@ describe("createMorphDriver", () => {
       driver.retarget(RETARGET);
       frames.frame(time);
       // (a) The new leg runs from the snapshot to the new target, position reset to 0, and
-      // (b) its spring starts from the old leg's velocity.
-      const next = stepSpring(
-        { position: 0, velocity: state.velocity },
-        CONFIG,
-        1,
-        FRAME_MS / 1000,
-      );
-      expect(emitted.at(-1)).toEqual(interpolate(snapshot, RETARGET, next.position));
+      // (b) its spring starts from the old velocity converted to the new leg's units: a square
+      // moved by d per unit of progress visibly moves |d|/√2, and leg 1's d is 100 while the new
+      // leg's is the distance from the snapshot to (0, 100).
+      const converted = (state.velocity * 100) / Math.hypot(offsetX(snapshot), 100);
+      const next = stepSpring({ position: 0, velocity: converted }, CONFIG, 1, FRAME_MS / 1000);
+      // Close, not equal: core measures visible rates numerically, this test analytically.
+      const expectedPoints = interpolate(snapshot, RETARGET, next.position)[0]?.points ?? [];
+      const emittedPoints = (emitted.at(-1) as Contour[])[0]?.points ?? [];
+      expect(emittedPoints).toHaveLength(expectedPoints.length);
+      expectedPoints.forEach((point, index) => {
+        expect(emittedPoints[index]?.x).toBeCloseTo(point.x, 9);
+        expect(emittedPoints[index]?.y).toBeCloseTo(point.y, 9);
+      });
       time += FRAME_MS;
 
       runUntilIdle(time, 1000 / 60);
@@ -225,13 +230,13 @@ describe("createMorphDriver", () => {
       expect(frames.pendingCount()).toBe(0);
     });
 
-    it("keeps progress velocity continuous across the interruption, measured from the output", () => {
+    it("keeps on-screen speed continuous across the interruption, measured from the output", () => {
       const driver = createMorphDriver(FROM, TO, CONFIG);
       const emitted = record(driver);
       let time = runTo(0.4, emitted);
       const [older, newer] = emitted.slice(-2) as [Contour[], Contour[]];
-      // Leg 1 moves the square 100 units in x per unit of progress.
-      const velocityBefore = (offsetX(newer) - offsetX(older)) / 100 / (FRAME_MS / 1000);
+      // A translated square's visible speed is proportional to how far it moves, in any direction.
+      const speedBefore = (offsetX(newer) - offsetX(older)) / (FRAME_MS / 1000);
 
       driver.retarget(RETARGET);
       frames.frame(time);
@@ -240,13 +245,17 @@ describe("createMorphDriver", () => {
       const afterFirst = emitted.at(-1) as Contour[];
       frames.frame(time);
       const afterSecond = emitted.at(-1) as Contour[];
-      // Leg 2 moves it from (snapshotX, 0) to (0, 100): 100 units in y per unit of progress.
+      // Leg 2 moves it from (snapshotX, 0) toward (0, 100), a different distance than leg 1's 100.
       expect(offsetX(afterFirst)).toBeLessThan(snapshotX);
-      const velocityAfter = (offsetY(afterSecond) - offsetY(afterFirst)) / 100 / (FRAME_MS / 1000);
+      const speedAfter =
+        Math.hypot(
+          offsetX(afterSecond) - offsetX(afterFirst),
+          offsetY(afterSecond) - offsetY(afterFirst),
+        ) /
+        (FRAME_MS / 1000);
 
-      expect(velocityBefore).toBeGreaterThan(1);
-      expect(velocityAfter).toBeGreaterThan(1);
-      expect(Math.abs(velocityAfter - velocityBefore) / velocityBefore).toBeLessThan(0.02);
+      expect(speedBefore).toBeGreaterThan(100);
+      expect(Math.abs(speedAfter - speedBefore) / speedBefore).toBeLessThan(0.02);
     });
 
     it("chains any number of interruptions and settles on the last target", () => {

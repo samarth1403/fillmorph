@@ -63,13 +63,13 @@ describe("runPlayback", () => {
     const [oldEnd, newStart] = atInstant as [(typeof atInstant)[0], (typeof atInstant)[0]];
     let state = startMorph(from, to);
     for (let step = 0; step < 20; step++) state = advanceMorph(state, config, 0.01);
-    const retargeted = retargetMorph(state, retargetTo);
+    const retargeted = retargetMorph(state, retargetTo, config);
     expect(oldEnd.contours).toEqual(state.contours);
     expect(newStart.contours).toEqual(retargeted.contours);
     expect(trace.legs[1]?.from).toEqual(state.contours);
     expect(trace.legs[1]?.to).toBe(retargetTo);
     expect(newStart.position).toBe(0);
-    expect(newStart.velocity).toBe(oldEnd.velocity);
+    expect(newStart.velocity).toBe(retargeted.spring.velocity);
     expect(interruption.velocityBefore).toBeGreaterThan(0);
     expect(trace.entries.at(-1)?.leg).toBe(1);
   });

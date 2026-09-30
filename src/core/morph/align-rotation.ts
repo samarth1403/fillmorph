@@ -29,7 +29,8 @@ export function rotationCost(from: readonly Point[], to: readonly Point[], offse
  * (k = 0); a placeholder partner, whose every offset costs the same, lands there with no special
  * case. Rotation only: direction is never reversed, since spec 02 already normalizes winding.
  *
- * O(N²). Expects `from` and `to` to have the same length (after deliverable #3).
+ * O(N²). Expects `from` and `to` to have the same length: since spec 07, both contours sampled
+ * evenly by arc length at deliverable #3's shared count (see `pairByArcLength`).
  */
 export function findBestRotation(from: readonly Point[], to: readonly Point[]): number {
   const tolerance = TIE_TOLERANCE_PER_POINT * from.length;
@@ -43,9 +44,4 @@ export function findBestRotation(from: readonly Point[], to: readonly Point[]): 
     }
   }
   return bestOffset;
-}
-
-/** `points` rotated so the result's index i is the input's index `(i + offset) mod N`. */
-export function rotatePoints(points: readonly Point[], offset: number): Point[] {
-  return [...points.slice(offset), ...points.slice(0, offset)];
 }

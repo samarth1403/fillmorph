@@ -7,6 +7,7 @@ import {
   checkSettling,
   checkVelocityContinuity,
   DEFAULT_SETTLING,
+  outlineDisplacement,
 } from "./timing-checks.ts";
 
 // Leg 1 translates a square 40 units right. Wherever the interruption catches it, the retarget
@@ -87,15 +88,104 @@ describe("checkVelocityContinuity", () => {
   it("judges on-screen speed, so a mapping that ignores the new leg's distance is flagged", () => {
     // Leg 1 moves 40 units per unit of progress; the retarget is ~160 units from the snapshot, so
     // carrying progress velocity unchanged makes the shape suddenly move ~4× faster on screen.
+    // That raw carry was spec 05's rule before its reopen; it's injected here as the fault.
     const farther = [square("c0", null, 0, 50, 210, 10)];
-    const trace = runPlayback({ ...base, interruption: { atTime: 0.2, to: farther } });
-    expect(checkVelocityContinuity(trace).passed).toBe(false);
+    const rawCarry: VelocityMapping = (velocity) => velocity;
+    const faulty = runPlayback({
+      ...base,
+      interruption: { atTime: 0.2, to: farther, mapVelocity: rawCarry },
+    });
+    expect(checkVelocityContinuity(faulty).passed).toBe(false);
+    // Core's own retarget converts the velocity, and passes.
+    const converted = runPlayback({ ...base, interruption: { atTime: 0.2, to: farther } });
+    expect(checkVelocityContinuity(converted).passed).toBe(true);
   });
 
   it("passes with a note when the trace has no interruption", () => {
     const result = checkVelocityContinuity(runPlayback(base));
     expect(result.passed).toBe(true);
     expect(result.notes).toEqual(["no interruption in this trace; nothing to check"]);
+  });
+});
+
+describe("outlineDisplacement (the visible part of motion)", () => {
+  /** A regular 64-gon of radius `radius` around (50, 50), started `phase` radians round. */
+  const circle = (radius: number, phase = 0): Contour[] => [
+    {
+      id: "c0",
+      parentId: null,
+      isHole: false,
+      depth: 0,
+      points: Array.from({ length: 64 }, (_, index) => {
+        const angle = phase - (index / 64) * Math.PI * 2;
+        return { x: 50 + radius * Math.cos(angle), y: 50 + radius * Math.sin(angle) };
+      }),
+    },
+  ];
+  const shift = (contours: Contour[], dx: number, dy: number): Contour[] =>
+    contours.map((c) => ({ ...c, points: c.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) }));
+
+  it("ignores points sliding along an outline that doesn't move", () => {
+    // Every vertex moves by up to ~0.98 units (a 1/64 turn of the vertex ring), none of it across
+    // the outline, apart from the polygon's own chord sag.
+    const step = (Math.PI * 2) / 64 / 2;
+    const displacement = outlineDisplacement(circle(20, -step), circle(20), circle(20, step));
+    expect(displacement).toBeLessThan(0.02);
+  });
+
+  it("measures growth in full: every point moves straight across the outline", () => {
+    expect(outlineDisplacement(circle(19), circle(20), circle(21))).toBeCloseTo(2, 9);
+  });
+
+  it("counts a translation's across-the-outline part: a circle moved 2 units scores 2/√2", () => {
+    // Around a circle, the normal part of a fixed displacement d is d·cos θ, whose RMS is d/√2.
+    const now = circle(20);
+    const displacement = outlineDisplacement(shift(now, -1, 0), now, shift(now, 1, 0));
+    expect(displacement).toBeCloseTo(2 / Math.SQRT2, 3);
+  });
+
+  it("weighs a contour by its drawn length, so a point-sized placeholder counts for nothing", () => {
+    const dot: Contour = {
+      id: "c1",
+      parentId: "c0",
+      isHole: true,
+      depth: 1,
+      points: Array.from({ length: 64 }, () => ({ x: 50, y: 50 })),
+    };
+    const moved = { ...dot, points: dot.points.map(() => ({ x: 60, y: 50 })) };
+    expect(
+      outlineDisplacement([...circle(19), dot], [...circle(20), dot], [...circle(21), moved]),
+    ).toBeCloseTo(2, 9);
+  });
+
+  it("weighs by outline length, not point count, so a crowded stretch doesn't dominate", () => {
+    // A 10×10 square whose top edge carries 9 extra points, 1 unit apart. Only those 9 move, 2 units
+    // straight across the edge: 9 units of a 40-unit outline, so RMS = 2·√(9/40). Counting points
+    // instead would give 2·√(9/13).
+    const topEdge = Array.from({ length: 9 }, (_, index) => ({ x: 9 - index, y: 0 }));
+    const frame = (dy: number): Contour[] => [
+      {
+        id: "c0",
+        parentId: null,
+        isHole: false,
+        depth: 0,
+        points: [
+          { x: 10, y: 0 },
+          ...topEdge.map((p) => ({ x: p.x, y: p.y + dy })),
+          { x: 0, y: 0 },
+          { x: 0, y: 10 },
+          { x: 10, y: 10 },
+        ],
+      },
+    ];
+    expect(outlineDisplacement(frame(1), frame(0), frame(-1))).toBeCloseTo(
+      2 * Math.sqrt(9 / 40),
+      9,
+    );
+  });
+
+  it("returns null when the frames' structure differs", () => {
+    expect(outlineDisplacement(circle(19), circle(20), [])).toBeNull();
   });
 });
 
