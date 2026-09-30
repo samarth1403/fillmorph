@@ -8,6 +8,8 @@
       "!**/.tsbuild",
       "!**/context",
       "!harness/output",
+      "!dev/output",
+      "!**/.tmp",
       "!harness/fixtures"
     ]
   },
@@ -104,6 +106,26 @@
                   {
                     "group": ["../src/**", "../../src/**", "../../../src/**"],
                     "message": "The harness may reach core only through the public \"fillmorph\" specifier."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["dev/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["../src/**", "../../src/**", "fillmorph/*/**"],
+                    "message": "The dev page uses fillmorph only through its public \"fillmorph\" / \"fillmorph/dom\" / \"fillmorph/react\" specifiers."
                   }
                 ]
               }

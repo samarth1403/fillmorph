@@ -25,7 +25,8 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "typecheck": "tsc -b",
-    "harness": "tsup --silent && node harness/cli.ts"
+    "harness": "tsup --silent && node harness/cli.ts",
+    "dev:react": "tsup --silent && tsup --silent --config dev/tsup.config.ts && echo \"Open dev/react-check/index.html in a browser.\""
   },
   "peerDependencies": {
     "react": ">=18"
@@ -38,7 +39,10 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
     "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "happy-dom": "^20.14.5",
     "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "vitest": "^5.0.1"

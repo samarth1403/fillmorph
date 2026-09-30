@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>fillmorph — React check</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        max-width: 760px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      section {
+        border-top: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+        padding: 1rem 0 2rem;
+      }
+      svg {
+        display: block;
+        margin: 1rem 0;
+        outline: 1px dashed color-mix(in srgb, currentColor 25%, transparent);
+      }
+      .buttons,
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        align-items: center;
+        margin: 0.5rem 0;
+      }
+      .controls input[type="range"] {
+        flex: 1;
+        min-width: 200px;
+      }
+      button.active {
+        font-weight: bold;
+        outline: 2px solid currentColor;
+      }
+      .error {
+        color: #c33;
+      }
+      code {
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>fillmorph — <code>&lt;FillMorph&gt;</code> check (spec 06)</h1>
+    <p>
+      Dev-only by-eye page, not a harness and not shipped. Built by <code>pnpm dev:react</code>
+      from the built <code>dist/</code>, under React's StrictMode.
+    </p>
+    <div id="root"></div>
+    <!-- A classic script (not a module), so the page opens straight from disk. -->
+    <script src="../output/react-check.global.js"></script>
+  </body>
+</html>

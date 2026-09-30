@@ -11,6 +11,11 @@ export default defineConfig({
   outDir: "dist",
   clean: true,
   tsconfig: "tsconfig.base.json",
+  // The base tsconfig sets no `jsx`, so esbuild would default to classic `React.createElement`
+  // calls with no `React` import; the automatic runtime imports `react/jsx-runtime` itself.
+  esbuildOptions(options) {
+    options.jsx = "automatic";
+  },
   dts: {
     compilerOptions: {
       // tsup's dts worker injects `baseUrl`, which TypeScript 6 flags as deprecated.

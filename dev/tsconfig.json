@@ -1,0 +1,28 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "rootDir": ".",
+    "outDir": "../.tsbuild/dev",
+    "lib": ["ES2022", "DOM"],
+    "jsx": "react-jsx",
+    // The harness's `.ts`-extension imports (see harness/tsconfig.json) are reused from here.
+    "allowImportingTsExtensions": true,
+    // Type-checking resolves the public specifiers to source; the page's bundle uses the built
+    // package instead (see dev/tsup.config.ts).
+    "paths": {
+      "fillmorph": ["../src/core/index.ts"],
+      "fillmorph/dom": ["../src/dom/index.ts"],
+      "fillmorph/react": ["../src/react/index.ts"]
+    }
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"],
+  "exclude": ["./output"],
+  "references": [
+    { "path": "../src/core" },
+    { "path": "../src/dom" },
+    { "path": "../src/react" },
+    { "path": "../harness" }
+  ]
+}
