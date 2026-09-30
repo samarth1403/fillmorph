@@ -1,14 +1,22 @@
 import { describe, expect, it } from "vitest";
 import type { Point } from "../contour";
-import { flattenSubpath, measureExtent } from "./flatten";
+import {
+  contourTolerance,
+  FLATTEN_TOLERANCE_RATIO,
+  flattenSubpath,
+  measureExtent,
+} from "./flatten";
 import { distanceToSegment } from "./geometry";
-import { parsePathData } from "./path-data";
+import { parsePathData, type Subpath } from "./path-data";
 
-const flatten = (d: string, tolerance: number): Point[] => {
+const onlySubpath = (d: string): Subpath => {
   const [subpath] = parsePathData(d);
-  if (!subpath) throw new Error("fixture has no subpath");
-  return flattenSubpath(subpath, tolerance);
+  if (subpath === undefined) throw new Error(`no subpath in "${d}"`);
+  return subpath;
 };
+
+const flatten = (d: string, tolerance: number): Point[] =>
+  flattenSubpath(onlySubpath(d), tolerance);
 
 const distanceToPolyline = (point: Point, polyline: readonly Point[]): number => {
   let best = Number.POSITIVE_INFINITY;
@@ -125,5 +133,48 @@ describe("measureExtent", () => {
 
   it("returns 1 for geometry with no size, so tolerances stay positive", () => {
     expect(measureExtent(parsePathData("M3 3 Z"))).toBe(1);
+  });
+
+  it("measures a full circle drawn with arcs as its diameter, like the Bézier equivalent", () => {
+    // FA's own circle: two 180° arcs of radius 256. Padding each arc end point by its radius
+    // used to report 1024 here, doubling every arc-built icon's tolerance.
+    expect(measureExtent(parsePathData("M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512z"))).toBe(
+      512,
+    );
+    expect(measureExtent(parsePathData("M0 256a256 256 0 1 1 512 0A256 256 0 1 1 0 256z"))).toBe(
+      512,
+    );
+  });
+
+  it("measures a quarter arc by its cubic's control points, not by its radius around each end", () => {
+    // A 90° arc from (10, 0) to (0, 10) about the origin: its cubic's control points stay within
+    // the 10 × 10 quadrant box.
+    expect(measureExtent(parsePathData("M10 0A10 10 0 0 1 0 10L0 0Z"))).toBeCloseTo(10, 12);
+  });
+});
+
+describe("contourTolerance", () => {
+  const iconTolerance = 512 * FLATTEN_TOLERANCE_RATIO;
+
+  it("is the ratio times the contour's own extent for a contour smaller than the icon", () => {
+    const dot = onlySubpath("M224 256a32 32 0 1 1 64 0 32 32 0 1 1 -64 0z");
+    expect(contourTolerance(dot, iconTolerance)).toBeCloseTo(64 * FLATTEN_TOLERANCE_RATIO, 12);
+  });
+
+  it("never exceeds the icon-wide tolerance, so a contour as large as the icon doesn't regress", () => {
+    const outer = onlySubpath("M0 256a256 256 0 1 1 512 0A256 256 0 1 1 0 256z");
+    expect(contourTolerance(outer, iconTolerance)).toBe(iconTolerance);
+    expect(contourTolerance(outer, iconTolerance / 2)).toBe(iconTolerance / 2);
+  });
+
+  it("gives a circle the same point count at any size relative to its icon (property)", () => {
+    const counts = [512, 256, 64, 16, 4].map((diameter) => {
+      const r = diameter / 2;
+      const circle = onlySubpath(
+        `M${256 - r} 256a${r} ${r} 0 1 1 ${diameter} 0a${r} ${r} 0 1 1 ${-diameter} 0z`,
+      );
+      return flattenSubpath(circle, contourTolerance(circle, iconTolerance)).length;
+    });
+    expect(new Set(counts).size).toBe(1);
   });
 });

@@ -3,11 +3,28 @@ import { distanceToSegment } from "./geometry";
 import type { Segment, Subpath } from "./path-data";
 
 /**
- * Maximum distance a flattened polyline may stray from the true curve, as a fraction of the
- * icon's overall size (see `measureExtent`). Relative rather than absolute so a 16-unit and a
- * 512-unit viewBox get the same visual fidelity: ~50 points on a full-size circle.
+ * Maximum distance a flattened polyline may stray from the true curve, as a fraction of a size
+ * (see `measureExtent`). Relative rather than absolute so a 16-unit and a 512-unit viewBox get the
+ * same visual fidelity. Applied per contour, capped by the icon-wide value; see
+ * `contourTolerance`.
  */
 export const FLATTEN_TOLERANCE_RATIO = 0.001;
+
+/**
+ * The flattening tolerance for one contour: `FLATTEN_TOLERANCE_RATIO` × the contour's own extent,
+ * capped at `iconTolerance` (the same ratio × the whole icon's extent).
+ *
+ * Why not one tolerance for the whole icon: an absolute error bound lets a small circle meet it
+ * with far fewer points than a large one (the count grows only with the square root of the
+ * radius), so a small inner contour came out visibly faceted — on FA's bullseye, the innermost
+ * disc was a 16-gon with 23° turns while the outer ring had 64 points. Relative to its own size,
+ * every contour gets the same angular smoothness, however small or deeply nested. The cap only
+ * ever tightens the tolerance, so a contour as large as the icon keeps exactly the icon-wide value
+ * and no contour gets fewer points than a single icon-wide tolerance would give it.
+ */
+export function contourTolerance(subpath: Subpath, iconTolerance: number): number {
+  return Math.min(iconTolerance, measureExtent([subpath]) * FLATTEN_TOLERANCE_RATIO);
+}
 
 /** Hard stop for recursive subdivision; only reachable with pathological input. */
 const MAX_SUBDIVISION_DEPTH = 16;
@@ -29,22 +46,28 @@ export function flattenSubpath(subpath: Subpath, tolerance: number): Point[] {
 }
 
 /**
- * The icon's size for tolerance purposes: the larger side of the bounding box of every end point
- * and control point in the icon (arc bulges are covered by their radii).
+ * The size of some geometry for tolerance purposes: the larger side of the bounding box of every
+ * end point and control point in `subpaths`. Arcs count through the control points of the ≤90°
+ * cubics they're flattened as (see `arcToCubics`), so an arc measures like the equivalent Bézier
+ * curve: a full circle of diameter D measures D, not more.
+ *
+ * Called on the whole icon for the icon-wide tolerance, and on one subpath for that contour's own
+ * tolerance (see `contourTolerance`).
  */
 export function measureExtent(subpaths: readonly Subpath[]): number {
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
-  const include = (point: Point, pad = 0): void => {
-    minX = Math.min(minX, point.x - pad);
-    minY = Math.min(minY, point.y - pad);
-    maxX = Math.max(maxX, point.x + pad);
-    maxY = Math.max(maxY, point.y + pad);
+  const include = (point: Point): void => {
+    minX = Math.min(minX, point.x);
+    minY = Math.min(minY, point.y);
+    maxX = Math.max(maxX, point.x);
+    maxY = Math.max(maxY, point.y);
   };
   for (const subpath of subpaths) {
     include(subpath.start);
+    let current = subpath.start;
     for (const segment of subpath.segments) {
       if (segment.kind === "cubic") {
         include(segment.ctrl1);
@@ -52,9 +75,13 @@ export function measureExtent(subpaths: readonly Subpath[]): number {
       } else if (segment.kind === "quadratic") {
         include(segment.ctrl);
       } else if (segment.kind === "arc") {
-        include(segment.to, Math.max(segment.rx, segment.ry));
+        for (const [, ctrl1, ctrl2] of arcToCubics(current, segment)) {
+          include(ctrl1);
+          include(ctrl2);
+        }
       }
       include(segment.to);
+      current = segment.to;
     }
   }
   const extent = Math.max(maxX - minX, maxY - minY);

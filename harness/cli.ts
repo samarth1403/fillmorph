@@ -1,8 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
+import { interpolate } from "fillmorph";
 import { FIXTURE_NAMES, loadFixture } from "./fixtures.ts";
 import { renderFrameGridPage } from "./frame-grid.ts";
 import { DEFAULT_PROGRESS_STEPS, DENSE_PROGRESS_STEPS } from "./frames.ts";
-import { naiveMorph } from "./morph-fn.ts";
 import { findPair, REFERENCE_PAIRS, type ReferencePair } from "./pairs.ts";
 import { renderPlaybackPage } from "./playback/playback-page.ts";
 import { runPairPlayback } from "./playback/run-pair-playback.ts";
@@ -25,8 +25,8 @@ Other modes (can be combined with the above):
 
 Pages are written to harness/output/. Exit code 1 if any check fails.
 
-Until spec 04 and spec 05 exist, the MorphFn is the naive stub and the playback step function
-is a damped stand-in, so failures are expected: they show the checks catch bad output.`;
+The MorphFn is spec 04's interpolate. Until spec 05 exists, the playback step function is a
+damped stand-in, so playback timing results say nothing about spec 05 yet.`;
 
 const OUTPUT_DIRECTORY = `${import.meta.dirname}/output`;
 
@@ -90,7 +90,7 @@ function main(args: readonly string[]): number {
   }
 
   if (selected.length > 0) {
-    const runs = selected.map((pair) => runPair(pair, naiveMorph, progressSteps));
+    const runs = selected.map((pair) => runPair(pair, interpolate, progressSteps));
     for (const run of runs) {
       const summary = run.checks
         .map((check) => `${check.check} ${check.passed ? "ok" : `FAIL(${check.failures.length})`}`)
@@ -99,7 +99,7 @@ function main(args: readonly string[]): number {
     }
     isFailing ||= runs.some((run) => !run.passed);
     console.log(
-      `→ ${writeOutput("frame-grid.html", renderFrameGridPage(runs, "naiveMorph (spec 03 stub)"))}`,
+      `→ ${writeOutput("frame-grid.html", renderFrameGridPage(runs, "interpolate (spec 04)"))}`,
     );
   }
 
@@ -108,7 +108,7 @@ function main(args: readonly string[]): number {
     const sections = playbackPairs.map((pair) =>
       runPairPlayback(pair, {
         step: dampedStubStep,
-        morph: naiveMorph,
+        morph: interpolate,
         base: { stiffness: 170, damping: 26, mass: 1 },
       }),
     );
@@ -121,7 +121,7 @@ function main(args: readonly string[]): number {
       isFailing ||= !passed;
     }
     const lede =
-      "Step function: dampedStubStep (a stand-in until spec 05's stepSpring). MorphFn: naiveMorph (spec 03 stub). " +
+      "Step function: dampedStubStep (a stand-in until spec 05's stepSpring). MorphFn: interpolate (spec 04). " +
       "Each pair is interrupted mid-flight and retargeted to a third icon; the playback replays the recorded simulated frames.";
     console.log(`→ ${writeOutput("playback.html", renderPlaybackPage(sections, lede))}`);
   }

@@ -4,7 +4,12 @@ import type { ParsedIcon } from "../icon";
 import { createCanonicalMapping } from "./canonical-frame";
 import { classifyNesting, type Nesting } from "./classify";
 import { describePath, validateIconContract } from "./contract";
-import { FLATTEN_TOLERANCE_RATIO, flattenSubpath, measureExtent } from "./flatten";
+import {
+  contourTolerance,
+  FLATTEN_TOLERANCE_RATIO,
+  flattenSubpath,
+  measureExtent,
+} from "./flatten";
 import { signedArea } from "./geometry";
 import { type ExtractedPath, parseSvgMarkup } from "./markup";
 import { normalizeContour } from "./normalize";
@@ -41,7 +46,8 @@ const DEGENERATE_AREA_RATIO = 1e-9;
  *    contain open subpaths, and "this is a stroke icon" is the accurate diagnosis for them.
  *
  * Every closed subpath of every rendered `<path>` becomes one `Contour`, flattened adaptively
- * (content-aware point density, per contour only — no cross-icon point-count reconciliation),
+ * (content-aware point density, with a tolerance relative to that contour's own size, capped at
+ * the icon-wide one — see `contourTolerance`; no cross-icon point-count reconciliation),
  * classified as outer/hole by containment, mapped into the canonical frame, and normalized in
  * winding and start point (see `Contour`). Contours are returned in document order, with ids `"c0"`, `"c1"`, … in that order
  * and each non-outer contour's `parentId` pointing at its innermost container.
@@ -113,7 +119,10 @@ function buildPolygon(
   extent: number,
   describe: () => string,
 ): Point[] {
-  const flattened = flattenSubpath(subpath, tolerance);
+  // Flattening uses the contour's own (capped) tolerance so small contours stay as smooth as
+  // large ones; the closing and classification checks keep the icon-wide one, since they absorb
+  // exporter rounding in absolute units rather than judging smoothness.
+  const flattened = flattenSubpath(subpath, contourTolerance(subpath, tolerance));
   const end = flattened[flattened.length - 1] as Point;
   if (!subpath.hasClosePath && distance(end, subpath.start) > tolerance) {
     throw new FillmorphParseError(

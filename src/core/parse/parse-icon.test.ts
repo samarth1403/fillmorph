@@ -483,10 +483,47 @@ describe("parseIcon — per-contour adaptive point density", () => {
     expect(small[0]?.points.length).toBe(large[0]?.points.length);
   });
 
-  it("gives each contour its own density: a small hole gets fewer points than its outer circle", () => {
+  it("gives each contour density for its own shape and size: straight edges stay sparse, a small dot is as smooth as a larger hole", () => {
     const [square, hole, dot] = contoursOf(CUSTOM_BULLSEYE).map((contour) => contour.points.length);
     expect(square).toBe(4);
-    expect(dot).toBeLessThan(hole as number);
+    // Tolerance is relative to each contour's own size (capped at the icon's), so two circles of
+    // different sizes get the same point count — the smaller one is not under-sampled.
+    expect(dot).toBe(hole);
+  });
+
+  it("keeps the smallest, deepest contour as smooth as the outer ring (FA bullseye regression)", () => {
+    // FA's bullseye: five concentric circles, radii 50 → 6.25 canonical, depth 0 → 4. With one
+    // icon-wide tolerance the depth-4 disc was a 16-gon (23° per edge, 2% chord gap relative to
+    // its radius) against the outer ring's 64 points (5.9°, 0.14%). Each contour must now match
+    // the outer ring's angle per edge and relative error.
+    const contours = contoursOf(FA_SOLID_BULLSEYE);
+    const measure = (contour: Contour) => {
+      const radius =
+        contour.points.reduce((sum, p) => sum + Math.hypot(p.x - 50, p.y - 50), 0) /
+        contour.points.length;
+      let maxStep = 0;
+      let maxGap = 0;
+      contour.points.forEach((p, index) => {
+        const q = contour.points[(index + 1) % contour.points.length] as Point;
+        const turn = Math.abs(Math.atan2(q.y - 50, q.x - 50) - Math.atan2(p.y - 50, p.x - 50));
+        maxStep = Math.max(maxStep, Math.min(turn, 2 * Math.PI - turn));
+        maxGap = Math.max(maxGap, radius - Math.hypot((p.x + q.x) / 2 - 50, (p.y + q.y) / 2 - 50));
+      });
+      return { radius, maxStep, relativeGap: maxGap / radius, count: contour.points.length };
+    };
+    const byDepth = [...contours].sort((a, b) => a.depth - b.depth).map(measure);
+    const outer = byDepth[0] as ReturnType<typeof measure>;
+    const innermost = byDepth[byDepth.length - 1] as ReturnType<typeof measure>;
+    expect(contours.map((c) => c.depth).sort()).toEqual([0, 1, 2, 3, 4]);
+    expect(innermost.radius).toBeCloseTo(6.25, 1);
+    expect(outer.radius).toBeCloseTo(50, 1);
+    for (const ring of byDepth) {
+      expect(ring.maxStep).toBeLessThanOrEqual(outer.maxStep * 1.05);
+      expect(ring.relativeGap).toBeLessThanOrEqual(outer.relativeGap * 1.05);
+      expect(ring.count).toBeGreaterThanOrEqual(outer.count);
+    }
+    // Absolute error shrinks with the contour, rather than staying at the icon-wide bound.
+    expect(innermost.relativeGap * innermost.radius).toBeLessThan(outer.relativeGap * outer.radius);
   });
 
   it("keeps a flattened circle's area within 0.5% of the true area", () => {
