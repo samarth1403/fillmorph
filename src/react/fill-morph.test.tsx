@@ -105,7 +105,9 @@ describe("<FillMorph> rendering", () => {
   it("draws the icon in its very first render, before any effect or frame runs", () => {
     // Server rendering runs no effects, so this is exactly what the first paint gets.
     const html = renderToStaticMarkup(<FillMorph icon={DIAMOND} springConfig={CONFIG} />);
-    expect(html).toBe(`<svg viewBox="0 0 100 100"><path d="${dOf(DIAMOND)}"></path></svg>`);
+    expect(html).toBe(
+      `<svg overflow="visible" viewBox="0 0 100 100"><path d="${dOf(DIAMOND)}"></path></svg>`,
+    );
     expect(frames.pendingCount()).toBe(0);
   });
 
@@ -128,6 +130,32 @@ describe("<FillMorph> rendering", () => {
     expect(svg?.getAttribute("role")).toBe("img");
     expect(svg?.getAttribute("fill")).toBe("currentColor");
     expect(svg?.getAttribute("data-testid")).toBe("morph");
+  });
+
+  it("lets an overshooting spring's pop draw past the frame, in both modes, by default", () => {
+    // Uncontrolled and controlled render through the same root <svg>.
+    const uncontrolled = renderToStaticMarkup(<FillMorph icon={SQUARE} />);
+    const controlled = renderToStaticMarkup(
+      <FillMorph icon={SQUARE} to={DIAMOND} progress={0.5} />,
+    );
+    for (const html of [uncontrolled, controlled])
+      expect(html).toMatch(/^<svg overflow="visible" /);
+  });
+
+  it("gives way to the caller's own overflow: an `overflow` prop, or CSS via style or class", () => {
+    const { container } = track(
+      mount(<FillMorph icon={SQUARE} overflow="hidden" style={{ overflow: "clip" }} />),
+    );
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("overflow")).toBe("hidden");
+    // Inline style (like any CSS rule) outranks a presentation attribute in the cascade.
+    expect(svg?.getAttribute("style")).toBe("overflow: clip;");
+  });
+});
+
+describe("<FillMorph> identity", () => {
+  it("keeps its name for React DevTools and React's warnings (arrow-function conversion)", () => {
+    expect(FillMorph.displayName).toBe("FillMorph");
   });
 });
 

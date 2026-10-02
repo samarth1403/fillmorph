@@ -101,6 +101,41 @@ describe("checkVelocityContinuity", () => {
     expect(checkVelocityContinuity(converted).passed).toBe(true);
   });
 
+  it("judges a retarget during an overshoot by the pop spec 05 draws there, not the unclamped geometry", () => {
+    // Underdamped: at 0.2 s the spring is past 1, where spec 05 draws the target slightly scaled.
+    const bouncy = { stiffness: 300, damping: 12, mass: 1 };
+    const trace = runPlayback({
+      ...base,
+      config: bouncy,
+      interruption: { atTime: 0.2, to: retargetTo },
+    });
+    expect(trace.interruptions[0]?.positionBefore).toBeGreaterThan(1);
+    expect(checkVelocityContinuity(trace).passed).toBe(true);
+    // Dropping the pop's speed at the retarget is a snap.
+    const dropped = checkVelocityContinuity(
+      runPlayback({
+        ...base,
+        config: bouncy,
+        interruption: { atTime: 0.2, to: retargetTo, mapVelocity: resetVelocity },
+      }),
+    );
+    expect(dropped.passed).toBe(false);
+  });
+
+  it("judges a retarget on the swing back below 1, after arriving, by the pop drawn there", () => {
+    const bouncy = { stiffness: 300, damping: 12, mass: 1 };
+    // About 0.35 s in, this underdamped leg has overshot and is swinging back below 1.
+    const trace = runPlayback({
+      ...base,
+      config: bouncy,
+      interruption: { atTime: 0.35, to: retargetTo },
+    });
+    const before = trace.interruptions[0];
+    expect(before?.positionBefore).toBeLessThan(1);
+    expect(trace.entries.some((entry) => entry.leg === 0 && entry.position >= 1)).toBe(true);
+    expect(checkVelocityContinuity(trace).passed).toBe(true);
+  });
+
   it("passes with a note when the trace has no interruption", () => {
     const result = checkVelocityContinuity(runPlayback(base));
     expect(result.passed).toBe(true);

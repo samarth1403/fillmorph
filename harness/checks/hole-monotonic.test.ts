@@ -110,6 +110,55 @@ describe("checkHoleMonotonic", () => {
     );
   });
 
+  it("passes a hole that leaves past progress 1, where an overshooting spring holds the exact target", () => {
+    // A fast spring jumps from 0.9 to past 1 in one frame: no frame shows the hole at ~0 first.
+    const result = checkHoleMonotonic([
+      withHole(0, 400),
+      withHole(0.5, 200),
+      withHole(0.9, 50),
+      frame(1.2, [outer]),
+      frame(1.3, [outer]),
+    ]);
+    expect(result.passed).toBe(true);
+    expect(result.notes).toEqual([
+      "hole c1 left the sequence past progress 1, held on the exact target, from p=1.2; counted as collapsed there",
+    ]);
+  });
+
+  it("still gates a hole that left past progress 1 as collapsing: a regrowth before is flagged", () => {
+    const result = checkHoleMonotonic([
+      withHole(0, 400),
+      withHole(0.5, 100),
+      withHole(0.8, 300),
+      frame(1.2, [outer]),
+    ]);
+    expect(result.passed).toBe(false);
+    expect(result.failures[0]?.message).toContain("between p=0.5 and p=0.8");
+  });
+
+  it("orders frames drawn after arrival (isOnTarget) after the morph's own, whatever their progress", () => {
+    // A growing hole: the morph reaches 0.9, then the arrived frames (the target, popped and
+    // swinging back to 0.95) are larger still. By raw progress they'd interleave and look reversed.
+    const result = checkHoleMonotonic([
+      withHole(0, 0),
+      withHole(0.5, 200),
+      withHole(0.9, 330),
+      { ...withHole(0.95, 390), isOnTarget: true },
+      { ...withHole(1.1, 420), isOnTarget: true },
+    ]);
+    expect(result.passed).toBe(true);
+  });
+
+  it("lets a hole leave at a frame drawn after arrival, even below progress 1", () => {
+    const result = checkHoleMonotonic([
+      withHole(0, 400),
+      withHole(0.5, 150),
+      withHole(0.85, 30),
+      { ...frame(0.92, [outer]), isOnTarget: true },
+    ]);
+    expect(result.passed).toBe(true);
+  });
+
   it("flags a collapsed hole that leaves and then comes back", () => {
     const result = checkHoleMonotonic([
       withHole(0, 400),

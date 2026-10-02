@@ -9,6 +9,13 @@
       "!**/context",
       "!harness/output",
       "!dev/output",
+      "!demo/dist",
+      "!demo/icons",
+      "!demo/ui-pairs",
+      "!demo/public",
+      "!demo/src/assets",
+      "!demo/src/snippets/generated-example.tsx",
+      "!demo/src/snippets/generated-example-vanilla.ts",
       "!**/.tmp",
       "!harness/fixtures"
     ]
@@ -115,7 +122,7 @@
       }
     },
     {
-      "includes": ["dev/**"],
+      "includes": ["dev/**", "demo/**"],
       "linter": {
         "rules": {
           "style": {
@@ -125,7 +132,7 @@
                 "patterns": [
                   {
                     "group": ["../src/**", "../../src/**", "fillmorph/*/**"],
-                    "message": "The dev page uses fillmorph only through its public \"fillmorph\" / \"fillmorph/dom\" / \"fillmorph/react\" specifiers."
+                    "message": "The dev and demo pages use fillmorph only through its public \"fillmorph\" / \"fillmorph/dom\" / \"fillmorph/react\" specifiers."
                   }
                 ]
               }
@@ -154,5 +161,10 @@
         }
       }
     }
-  ]
+  ],
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  }
 }

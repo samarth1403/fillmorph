@@ -1,6 +1,7 @@
 import { type Contour, interpolate, type Point } from "fillmorph";
 import { type CheckFailure, type CheckResult, checkResult } from "../checks/check-result.ts";
 import { distanceToSegment, formatNumber, polygonArea, signedPolygonArea } from "../geometry.ts";
+import { arrivedFlags, poppedTarget } from "./overshoot-rule.ts";
 import type { PlaybackTrace, TraceEntry } from "./runner.ts";
 
 export type SettlingOptions = {
@@ -192,6 +193,16 @@ function visibleRate(from: Contour[], to: Contour[], progress: number): number |
   return displacement === null ? null : displacement / (2 * DERIVATIVE_STEP);
 }
 
+/** `outlineDisplacement` of the overshoot pop around `progress`, per unit of progress. */
+function overshootRate(to: Contour[], progress: number): number | null {
+  const displacement = outlineDisplacement(
+    poppedTarget(to, progress - DERIVATIVE_STEP),
+    poppedTarget(to, progress),
+    poppedTarget(to, progress + DERIVATIVE_STEP),
+  );
+  return displacement === null ? null : displacement / (2 * DERIVATIVE_STEP);
+}
+
 /**
  * Deliverable #7 velocity-continuity check: at each interruption, the shape's on-screen speed
  * (visible outline speed, canonical units per second; see `outlineDisplacement`) just before and
@@ -201,6 +212,11 @@ function visibleRate(from: Contour[], to: Contour[], progress: number): number |
  * progress space — this is what lets it judge spec 05's velocity conversion, not just compare two
  * numbers in different units. Speed is compared, not direction: retargeting turns the motion by
  * design.
+ *
+ * An old leg is judged by what spec 05 draws, not by the unclamped geometry, which the page never
+ * shows (added with spec 05's overshoot reopens): once the leg has arrived (read from the trace)
+ * it is the target scaled by the spring's overshoot (`poppedTarget`), above or below 1; before
+ * that, below 0, the shape is held still.
  */
 export function checkVelocityContinuity(
   trace: PlaybackTrace,
@@ -215,6 +231,7 @@ export function checkVelocityContinuity(
   }
   const failures: CheckFailure[] = [];
   const notes: string[] = [];
+  const isArrived = arrivedFlags(trace.entries);
   for (const interruption of trace.interruptions) {
     const { context } = interruption;
     const frameIndices = trace.entries
@@ -222,7 +239,14 @@ export function checkVelocityContinuity(
       .filter(({ entry }) => entry.time === interruption.time)
       .map(({ index }) => index);
     const at = `t=${formatNumber(interruption.time)}s`;
-    const rateBefore = visibleRate(context.oldFrom, context.oldTo, context.position);
+    // The old leg's last entry is the first one recorded at the interruption's time.
+    const oldEntry = frameIndices[0];
+    const hasOldLegArrived = oldEntry !== undefined && isArrived[oldEntry] === true;
+    const rateBefore = hasOldLegArrived
+      ? overshootRate(context.oldTo, context.position)
+      : context.position < 0
+        ? 0
+        : visibleRate(context.oldFrom, context.oldTo, context.position);
     const rateAfter = visibleRate(context.snapshot, context.newTo, 0);
     if (rateBefore === null || rateAfter === null) {
       failures.push({

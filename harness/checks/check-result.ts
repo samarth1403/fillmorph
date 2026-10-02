@@ -4,7 +4,8 @@ export type CheckName =
   | "containment"
   | "settling"
   | "velocity-continuity"
-  | "position-continuity";
+  | "position-continuity"
+  | "arrived-shape";
 
 /** One thing a check found wrong. */
 export type CheckFailure = {

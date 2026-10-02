@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>fillmorph — morph filled SVG icons with spring physics</title>
+    <meta
+      name="description"
+      content="fillmorph morphs one filled SVG icon into another, holes and all, with real spring physics. Not a crossfade, not an icon swap."
+    />
+    <!-- Brand mark (spec 08 §1i): Font Awesome Free's solid fire with an orange-to-yellow gradient.
+         favicon.svg is the source; the ICO and touch icon are rendered from it by `pnpm demo:favicons`. -->
+    <link rel="icon" href="./favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <script>
+      // Before first paint, so the page never flashes the wrong theme. Dark unless the visitor
+      // chose light here before; storage can be unavailable (private mode), which means dark.
+      try {
+        if (localStorage.getItem("fillmorph-theme") === "light") {
+          document.documentElement.classList.remove("dark");
+        }
+      } catch {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>fillmorph's demo needs JavaScript: every icon on it is morphed live.</noscript>
+    <script type="module" src="./src/main.tsx"></script>
+  </body>
+</html>

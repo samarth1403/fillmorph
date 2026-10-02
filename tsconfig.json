@@ -6,6 +6,7 @@
     { "path": "./src/react" },
     { "path": "./harness" },
     { "path": "./dev" },
+    { "path": "./demo" },
     { "path": "./tsconfig.tooling.json" }
   ]
 }

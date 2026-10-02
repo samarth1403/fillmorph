@@ -1,0 +1,29 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "rootDir": ".",
+    "outDir": "../.tsbuild/demo",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    // The comparison section reuses the harness's naive stub and geometry checks, which import
+    // each other with `.ts` extensions (see harness/tsconfig.json).
+    "allowImportingTsExtensions": true,
+    // Type-checking resolves the public specifiers to source; the site's bundle uses the built
+    // package instead (see demo/vite.config.ts).
+    "paths": {
+      "fillmorph": ["../src/core/index.ts"],
+      "fillmorph/dom": ["../src/dom/index.ts"],
+      "fillmorph/react": ["../src/react/index.ts"]
+    }
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"],
+  "exclude": ["./dist"],
+  "references": [
+    { "path": "../src/core" },
+    { "path": "../src/dom" },
+    { "path": "../src/react" },
+    { "path": "../harness" }
+  ]
+}

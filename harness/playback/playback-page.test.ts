@@ -68,6 +68,7 @@ describe("runPairPlayback", () => {
       "settling",
       "velocity-continuity",
       "position-continuity",
+      "arrived-shape",
     ]);
     expect(section.tuning?.config).not.toBeNull();
     expect(renderPlaybackPage([section], "stub")).toContain(pair.name);

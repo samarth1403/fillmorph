@@ -5,6 +5,7 @@ dist/
 coverage/
 harness/output/
 dev/output/
+demo/dist/
 # In-repo scratch space (mutation-check backups etc.); nothing is written outside the project
 .tmp/
 .DS_Store

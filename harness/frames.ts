@@ -8,6 +8,12 @@ export type Frame = {
   contours: Contour[];
   /** How reports refer to this frame, e.g. `p=0.25` or `t=0.250s p=0.41 (leg 2)`. */
   label: string;
+  /**
+   * Playback only: the frame comes after its leg arrived (spring first reached 1), so spec 05
+   * draws it as the leg's target, popped, whatever its position. Ordered after the morph's own
+   * frames, and a hole may leave the sequence there.
+   */
+  isOnTarget?: boolean;
 };
 
 /** The quick-pass default: 5 frames. */

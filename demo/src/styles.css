@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+/* The theme toggle sets `.dark` on <html>; dark is the default (see index.html). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: light;
+}
+:root.dark {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-feature-settings: "cv11", "ss01";
+}
+
+/* Gradient accents: soft light behind the hero and its morphing icon, stronger in dark mode. */
+.hero-backdrop {
+  background:
+    radial-gradient(
+      60% 50% at 20% 0%,
+      color-mix(in oklab, var(--color-orange-500) 12%, transparent),
+      transparent
+    ),
+    radial-gradient(
+      40% 40% at 90% 10%,
+      color-mix(in oklab, var(--color-orange-400) 8%, transparent),
+      transparent
+    );
+}
+.dark .hero-backdrop {
+  background:
+    radial-gradient(
+      60% 50% at 20% 0%,
+      color-mix(in oklab, var(--color-orange-500) 20%, transparent),
+      transparent
+    ),
+    radial-gradient(
+      40% 40% at 90% 10%,
+      color-mix(in oklab, var(--color-amber-500) 10%, transparent),
+      transparent
+    );
+}
+.hero-glow {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--color-orange-500) 22%, transparent),
+    color-mix(in oklab, var(--color-amber-500) 10%, transparent),
+    transparent
+  );
+}
+.dark .hero-glow {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--color-orange-500) 28%, transparent),
+    color-mix(in oklab, var(--color-amber-500) 14%, transparent),
+    transparent
+  );
+}
+
+/* The playground's compact spring sliders: a thin track and a small orange thumb. */
+.range {
+  /* `appearance: none` (for the thin track) also drops the browser's own filled portion, so the
+     fill is drawn here: orange up to `--fill` (set per slider from its value), track after. */
+  --track: var(--color-neutral-200);
+  @apply h-1 w-full cursor-pointer appearance-none rounded-full;
+  background: linear-gradient(
+    to right,
+    var(--color-orange-500) var(--fill, 0%),
+    var(--track) var(--fill, 0%)
+  );
+}
+.dark .range {
+  --track: rgb(255 255 255 / 0.15);
+}
+.range::-webkit-slider-thumb {
+  @apply size-3 appearance-none rounded-full border-0 bg-orange-500 shadow-[0_0_0_3px] shadow-orange-500/20;
+}
+.range::-moz-range-thumb {
+  @apply size-3 rounded-full border-0 bg-orange-500 shadow-[0_0_0_3px] shadow-orange-500/20;
+}
+.range:focus-visible {
+  @apply outline-2 outline-offset-4 outline-orange-500;
+}
+
+/* Syntax highlighting for the code tabs: one palette per theme. */
+.tok-comment {
+  @apply text-neutral-500 italic;
+}
+.tok-keyword {
+  @apply text-orange-600 dark:text-orange-300;
+}
+.tok-string {
+  @apply text-emerald-700 dark:text-emerald-300;
+}
+.tok-tag {
+  @apply text-sky-700 dark:text-sky-300;
+}
+.tok-attr {
+  @apply text-amber-700 dark:text-amber-200;
+}
+.tok-number {
+  @apply text-rose-600 dark:text-rose-300;
+}
+.tok-function {
+  @apply text-blue-700 dark:text-blue-300;
+}
+.tok-punct {
+  @apply text-neutral-500 dark:text-neutral-400;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}

@@ -1,6 +1,7 @@
 import { parseIcon, type SpringConfig } from "fillmorph";
 import { loadFixture } from "../fixtures.ts";
 import type { ReferencePair } from "../pairs.ts";
+import { checkArrivedShape } from "./arrived-shape.ts";
 import { autoTuneSpring } from "./auto-tune.ts";
 import type { PlaybackSection } from "./playback-page.ts";
 import { DEFAULT_PLAYBACK_DT, runPlayback } from "./runner.ts";
@@ -16,6 +17,11 @@ import { checkTraceGeometry } from "./trace-geometry.ts";
 export type PairPlaybackOptions = {
   /** Starting spring config, auto-tuned against the timing checks before the final run. */
   base: SpringConfig;
+  /**
+   * False runs `base` exactly as given, without auto-tuning: for grading a fixed config such as
+   * spec 08's overshooting Bouncy preset. Defaults to true.
+   */
+  isAutoTuned?: boolean;
   /** Simulated seconds. Defaults to 3. */
   duration?: number;
   /** When the scripted retarget to `pair.interruptTo` happens. Defaults to 0.2 s. */
@@ -25,7 +31,7 @@ export type PairPlaybackOptions = {
 
 /**
  * Deliverable #7 end to end for one reference pair: `from` → `to`, interrupted mid-flight toward
- * `interruptTo`. Auto-tunes the spring first, then records the final trace with the chosen config
+ * `interruptTo`. Auto-tunes the spring first (unless `isAutoTuned` is false), then records the final trace with the chosen config
  * (or the starting one, if nothing passed) and runs every geometry and timing check on it.
  */
 export function runPairPlayback(
@@ -43,13 +49,15 @@ export function runPairPlayback(
     dt: options.dt ?? DEFAULT_PLAYBACK_DT,
     interruption,
   };
-  const tuning = autoTuneSpring({ base: options.base, playback });
-  const trace = runPlayback({ ...playback, config: tuning.config ?? options.base });
+  const tuning =
+    options.isAutoTuned === false ? null : autoTuneSpring({ base: options.base, playback });
+  const trace = runPlayback({ ...playback, config: tuning?.config ?? options.base });
   const checks = [
     ...checkTraceGeometry(trace),
     checkSettling(trace, DEFAULT_SETTLING),
     checkVelocityContinuity(trace, DEFAULT_CONTINUITY),
     checkPositionContinuity(trace),
+    checkArrivedShape(trace),
   ];
   return {
     title: pair.name,

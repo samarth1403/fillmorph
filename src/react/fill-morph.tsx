@@ -109,20 +109,28 @@ function useLastParsed(parsed: IconParse): Contour[] | null {
   return parsed.contours ?? last;
 }
 
-function MorphSvg({
+/**
+ * The root `<svg>`. It defaults to `overflow="visible"`: a spring that overshoots draws its target
+ * slightly larger than the frame (spec 05's overshoot pop, about 3% per side for an icon that
+ * fills it), and browsers clip an inline `<svg>` to its box by default, which would silently cut
+ * the bounce off. It's a presentation attribute, not inline style, so any CSS the caller sets (a
+ * class or `style`) still wins, and so does an `overflow` prop. Geometry inside the frame draws
+ * the same either way.
+ */
+const MorphSvg = ({
   contours,
   svgProps,
 }: {
   contours: Contour[];
   svgProps: FillMorphSvgProps;
-}): ReactElement {
+}): ReactElement => {
   return (
     // biome-ignore lint/a11y/noSvgWithoutTitle: the caller names it (or hides it) via passthrough `aria-*`/`role` props
-    <svg {...svgProps} viewBox={VIEW_BOX}>
+    <svg overflow="visible" {...svgProps} viewBox={VIEW_BOX}>
       <path d={renderContours(contours)} />
     </svg>
   );
-}
+};
 
 type ModeProps = {
   icon: string;
@@ -131,27 +139,27 @@ type ModeProps = {
   handleRef: ForwardedRef<FillMorphHandle>;
 };
 
-function UncontrolledFillMorph({
+const UncontrolledFillMorph = ({
   icon,
   springConfig,
   onError,
   svgProps,
   handleRef,
-}: ModeProps & { springConfig: SpringConfig | undefined }): ReactElement {
+}: ModeProps & { springConfig: SpringConfig | undefined }): ReactElement => {
   const { contours, retarget, error } = useFillMorph(icon, springConfig);
   useImperativeHandle(handleRef, () => ({ morphTo: retarget }), [retarget]);
   useSurfacedError(error, onError);
   return <MorphSvg contours={contours} svgProps={svgProps} />;
-}
+};
 
-function ControlledFillMorph({
+const ControlledFillMorph = ({
   icon,
   to,
   progress,
   onError,
   svgProps,
   handleRef,
-}: ModeProps & { to: string; progress: number }): ReactElement {
+}: ModeProps & { to: string; progress: number }): ReactElement => {
   const fromParsed = useMemo(() => parseIconMarkup(icon), [icon]);
   const toParsed = useMemo(() => parseIconMarkup(to), [to]);
   const from = useLastParsed(fromParsed);
@@ -176,7 +184,7 @@ function ControlledFillMorph({
     [from, target, clamped],
   );
   return <MorphSvg contours={contours} svgProps={svgProps} />;
-}
+};
 
 /**
  * Morphs filled SVG icons (spec 06), rendering one `<svg viewBox={CANONICAL_VIEW_BOX}>` with a
@@ -191,8 +199,11 @@ function ControlledFillMorph({
  *
  * The mode is fixed by whether `progress` was passed on the first render, as React does for
  * controlled inputs; switching later only warns in development.
+ *
+ * The `<svg>` allows overflow by default, so an overshooting spring's bounce isn't clipped at the
+ * frame's edge; override it with CSS or an `overflow` prop if the icon must stay inside its box.
  */
-const FillMorph = forwardRef<FillMorphHandle, FillMorphProps>(function FillMorph(props, ref) {
+const FillMorph = forwardRef<FillMorphHandle, FillMorphProps>((props, ref) => {
   const { icon, progress, to, springConfig, onError, ...svgProps } = props;
   const [isControlled] = useState(progress !== undefined);
   const hasWarnedRef = useRef(false);
@@ -223,5 +234,6 @@ const FillMorph = forwardRef<FillMorphHandle, FillMorphProps>(function FillMorph
     />
   );
 });
+FillMorph.displayName = "FillMorph";
 
 export default FillMorph;

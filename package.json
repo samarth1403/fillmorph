@@ -1,7 +1,31 @@
 {
   "name": "fillmorph",
-  "version": "0.0.0",
-  "description": "Morph filled SVG icons into other filled SVG icons with spring physics.",
+  "version": "0.1.0",
+  "description": "Morph filled SVG icons into each other, holes and all, with real spring physics.",
+  "keywords": [
+    "svg",
+    "icon",
+    "icons",
+    "morph",
+    "morphing",
+    "animation",
+    "spring",
+    "spring-physics",
+    "transition",
+    "filled-icons",
+    "react",
+    "font-awesome"
+  ],
+  "license": "MIT",
+  "author": "Samarth Ikkalaki",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/samarth1403/fillmorph.git"
+  },
+  "homepage": "https://github.com/samarth1403/fillmorph#readme",
+  "bugs": {
+    "url": "https://github.com/samarth1403/fillmorph/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -18,7 +42,13 @@
       "import": "./dist/react/index.js"
     }
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
+    "prepack": "tsup",
     "build": "tsup",
     "test": "vitest run",
     "lint": "biome lint .",
@@ -26,7 +56,12 @@
     "format:check": "biome format .",
     "typecheck": "tsc -b",
     "harness": "tsup --silent && node harness/cli.ts",
-    "dev:react": "tsup --silent && tsup --silent --config dev/tsup.config.ts && echo \"Open dev/react-check/index.html in a browser.\""
+    "dev:react": "tsup --silent && tsup --silent --config dev/tsup.config.ts && echo \"Open dev/react-check/index.html in a browser.\"",
+    "demo:dev": "tsup --silent && vite --config demo/vite.config.ts",
+    "demo:build": "tsup --silent && vite build --config demo/vite.config.ts",
+    "demo:preview": "vite preview --config demo/vite.config.ts",
+    "demo:favicons": "tsup --silent && python3 demo/scripts/build-favicons.py",
+    "demo:vet": "pnpm harness --vet-icons demo/icons --vet-icons demo/ui-pairs/copy --vet-icons demo/ui-pairs/theme"
   },
   "peerDependencies": {
     "react": ">=18"
@@ -38,13 +73,19 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
     "happy-dom": "^20.14.5",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.3",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
+    "vite": "^8.3.1",
     "vitest": "^5.0.1"
   }
 }

@@ -4,9 +4,12 @@ import { interpolate } from "../morph/interpolate";
 import { rectangle } from "../morph/test-helpers";
 import { advanceMorph, type MorphState, retargetMorph, startMorph } from "./morph-state";
 import { stepSpring } from "./step-spring";
-import { visibleRate } from "./visible-rate";
+import { popContours } from "./overshoot";
+import { overshootRate, visibleRate } from "./visible-rate";
 
 const CONFIG = { stiffness: 170, damping: 26, mass: 1 };
+/** Underdamped (ζ ≈ 0.29), so the spring overshoots its target. */
+const BOUNCY = { stiffness: 300, damping: 10, mass: 1 };
 const FRAME = 1 / 60;
 
 function box(x: number, y: number, size = 10): Contour {
@@ -38,6 +41,7 @@ describe("startMorph", () => {
       spring: { position: 0, velocity: 0 },
       contours: interpolate(FROM, TO, 0),
       isSettled: false,
+      hasArrived: false,
     });
   });
 
@@ -75,6 +79,48 @@ describe("advanceMorph", () => {
   it("stays settled", () => {
     const settled = advanceFor(startMorph(FROM, TO), 3);
     expect(advanceMorph(settled, CONFIG, FRAME)).toEqual(settled);
+  });
+
+  it("interpolates until the spring first reaches 1, then draws only the popped target", () => {
+    // ζ ≈ 0.29: overshoots by about 40%, then swings back below 1 more than once. Unclamped, the
+    // ring's hole would turn inside out; interpolating again on the swing back would slide the
+    // shape toward `from` mid-bounce (the bug spec 05's fourth reopen fixed).
+    let state = startMorph(RING, TO);
+    let arrivedAt: number | null = null;
+    let undershootFrames = 0;
+    for (let step = 0; step < 180 && !state.isSettled; step++) {
+      state = advanceMorph(state, BOUNCY, FRAME);
+      if (state.isSettled) break;
+      const { position } = state.spring;
+      if (arrivedAt === null && position >= 1) arrivedAt = step;
+      expect(state.hasArrived).toBe(arrivedAt !== null);
+      if (arrivedAt === null) {
+        expect(state.contours).toEqual(interpolate(RING, TO, position));
+      } else {
+        expect(state.contours).toEqual(popContours(TO, position));
+        if (position < 1) undershootFrames++;
+      }
+    }
+    expect(arrivedAt).not.toBeNull();
+    expect(undershootFrames).toBeGreaterThan(5);
+  });
+
+  it("never brings `from` back after arriving: an undershoot draws the target slightly shrunk", () => {
+    let state = startMorph(FROM, TO);
+    while (state.spring.position < 1) state = advanceMorph(state, BOUNCY, FRAME);
+    while (state.spring.position >= 1) state = advanceMorph(state, BOUNCY, FRAME);
+    // Swinging back below 1 now: the box stays at TO's place, a little smaller.
+    expect(state.spring.position).toBeLessThan(1);
+    const xs = (state.contours[0]?.points ?? []).map((point) => point.x);
+    expect(Math.min(...xs)).toBeGreaterThan(100);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(10);
+  });
+
+  it("holds the shape on `from` while the spring is below 0", () => {
+    const backwards = { ...startMorph(FROM, TO), spring: { position: 0, velocity: -5 } };
+    const state = advanceMorph(backwards, CONFIG, FRAME);
+    expect(state.spring.position).toBeLessThan(0);
+    expect(state.contours).toEqual(interpolate(FROM, TO, 0));
   });
 
   it("throws RangeError for an invalid config or dt", () => {
@@ -156,6 +202,39 @@ describe("retargetMorph", () => {
     expect(retargetMorph(moving, RETARGET, CONFIG).spring.velocity).toBe(0);
     // Even when the new leg doesn't move the shape either: 0, not the cap.
     expect(retargetMorph(moving, FROM, CONFIG).spring.velocity).toBe(0);
+  });
+
+  it("carries the overshoot pop's visible speed when retargeting past 1", () => {
+    let state = startMorph(FROM, TO);
+    while (state.spring.position <= 1.05) state = advanceMorph(state, BOUNCY, FRAME);
+    const { position, velocity } = state.spring;
+    const retargeted = retargetMorph(state, RETARGET, BOUNCY);
+    const expected =
+      (Math.abs(velocity) * overshootRate(TO, position)) / visibleRate(state.contours, RETARGET, 0);
+    expect(overshootRate(TO, position)).toBeGreaterThan(0);
+    expect(retargeted.spring.velocity).toBeCloseTo(Math.sign(velocity) * expected, 10);
+    expect(retargeted.from).toBe(state.contours);
+  });
+
+  it("carries the pop's visible speed when retargeting mid-bounce below 1, after arriving", () => {
+    let state = startMorph(FROM, TO);
+    while (state.spring.position < 1) state = advanceMorph(state, BOUNCY, FRAME);
+    while (state.spring.position >= 1) state = advanceMorph(state, BOUNCY, FRAME);
+    state = advanceMorph(state, BOUNCY, FRAME);
+    const { position, velocity } = state.spring;
+    expect(state.hasArrived).toBe(true);
+    expect(position).toBeLessThan(1);
+    const expected =
+      (Math.abs(velocity) * overshootRate(TO, position)) / visibleRate(state.contours, RETARGET, 0);
+    const retargeted = retargetMorph(state, RETARGET, BOUNCY);
+    expect(retargeted.spring.velocity).toBeCloseTo(Math.sign(velocity) * expected, 10);
+    // The new leg starts unarrived, interpolating from the snapshot.
+    expect(retargeted.hasArrived).toBe(false);
+  });
+
+  it("gives 0 below position 0, where the shape is held still", () => {
+    const backwards = { ...startMorph(FROM, TO), spring: { position: -0.1, velocity: -2 } };
+    expect(retargetMorph(backwards, RETARGET, BOUNCY).spring.velocity).toBe(0);
   });
 
   it("measures each leg's visible rate where the retarget happens: the old at its position, the new at 0", () => {

@@ -18,6 +18,8 @@ const AREA_NOISE_RATIO = 1e-9;
  *
  * - Frames are taken in **progress order** (sorted, stable), since monotonicity is about how the
  *   shape changes with progress; the order they were sampled or played in doesn't matter.
+ *   Playback frames marked `isOnTarget` (drawn after their leg arrived) come after all the others,
+ *   in progress order among themselves (spec 05's fourth reopen).
  * - A hole id present in some frame but missing (or no longer a hole) in another is a failure
  *   naming the id and the frame where it's missing — a hole vanishing between frames is itself a
  *   discontinuity. Such a hole's area isn't judged further. **One exception** (spec 03 #5, as
@@ -28,6 +30,13 @@ const AREA_NOISE_RATIO = 1e-9;
  *   vanished hole for the exact target shape. Leaving before collapsing, reappearing after going
  *   missing, or being missing before first appearing all stay failures, and the frames where the
  *   hole is present are still judged for monotonicity below.
+ *   **Also allowed** (added with spec 05's clamp reopen): leaving at a frame past progress 1, or
+ *   at one marked `isOnTarget` (spec 05's fourth reopen draws those as the target too). Only
+ *   an overshooting spring puts a frame there, and spec 05 draws such a frame as the leg's exact
+ *   target (the shape is held on it), which interpolate's collapsed zero-area placeholder matches.
+ *   A fast spring can jump from well short of 1 to past it in one frame, so no sampled frame shows
+ *   the hole at ~0 first. The hole then counts as collapsed to area 0 at that frame, so its
+ *   shrinking is still gated below.
  * - A hole that collapses to a point or grows from one (its area is ~0 in some frame) must change
  *   area monotonically across the whole sequence: shrinking if it reaches the point after its
  *   largest frame, growing if before. Each step that reverses direction is flagged with its
@@ -40,7 +49,11 @@ const AREA_NOISE_RATIO = 1e-9;
 export function checkHoleMonotonic(frames: readonly Frame[]): CheckResult {
   const order = frames
     .map((frame, index) => ({ frame, index }))
-    .sort((a, b) => a.frame.progress - b.frame.progress);
+    .sort(
+      (a, b) =>
+        Number(a.frame.isOnTarget === true) - Number(b.frame.isOnTarget === true) ||
+        a.frame.progress - b.frame.progress,
+    );
 
   const holeIds: string[] = [];
   for (const { frame } of order) {
@@ -69,8 +82,14 @@ export function checkHoleMonotonic(frames: readonly Frame[]): CheckResult {
     const largest = Math.max(0, ...areas);
     if (missing.length > 0) {
       const lastArea = areas[areas.length - 1] ?? Number.POSITIVE_INFINITY;
+      const firstMissing = missing[0] as (typeof missing)[number];
+      const hasLeftOnTarget =
+        !isReturning &&
+        track.length > 0 &&
+        (firstMissing.frame.progress > 1 || firstMissing.frame.isOnTarget === true);
       const hasLeftCollapsed =
-        !isReturning && track.length > 0 && lastArea <= largest * COLLAPSED_AREA_RATIO;
+        hasLeftOnTarget ||
+        (!isReturning && track.length > 0 && lastArea <= largest * COLLAPSED_AREA_RATIO);
       if (!hasLeftCollapsed) {
         const reason = isReturning
           ? "so it can't be tracked across the sequence"
@@ -84,9 +103,17 @@ export function checkHoleMonotonic(frames: readonly Frame[]): CheckResult {
         }
         continue;
       }
-      notes.push(
-        `hole ${id} collapsed to a point, then left the sequence from ${(missing[0] as (typeof missing)[number]).frame.label}`,
-      );
+      if (hasLeftOnTarget && lastArea > largest * COLLAPSED_AREA_RATIO) {
+        track.push({ area: 0, index: firstMissing.index, frame: firstMissing.frame });
+        areas.push(0);
+        notes.push(
+          `hole ${id} left the sequence past progress 1, held on the exact target, from ${firstMissing.frame.label}; counted as collapsed there`,
+        );
+      } else {
+        notes.push(
+          `hole ${id} collapsed to a point, then left the sequence from ${firstMissing.frame.label}`,
+        );
+      }
     }
     if (track.length < 2) continue;
     if (largest === 0) continue;

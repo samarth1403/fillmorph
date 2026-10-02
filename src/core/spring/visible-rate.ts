@@ -1,28 +1,46 @@
 import type { Contour, Point } from "../contour";
 import { interpolate } from "../morph/interpolate";
+import { popContours } from "./overshoot";
 
 /** Step for the numerical derivative of `interpolate` with respect to progress. */
 const DERIVATIVE_STEP = 1e-4;
 
 /**
  * How fast a morph from `from` to `to` visibly moves the shape per unit of progress, at
- * `progress`: the root-mean-square, over the drawn outline, of each vertex's velocity
- * perpendicular to the outline, weighted by the length of outline the vertex stands for (half of
- * each adjacent edge). Canonical units per unit of progress.
+ * `progress`: `outlineRate` of `interpolate(from, to, ·)`.
+ */
+export function visibleRate(from: Contour[], to: Contour[], progress: number): number {
+  return outlineRate((at) => interpolate(from, to, at), progress);
+}
+
+/**
+ * How fast the drawn shape moves per unit of progress while the spring overshoots past 1, where
+ * the leg draws `popContours(to, ·)` (spec 05's overshoot reopen).
+ */
+export function overshootRate(to: Contour[], progress: number): number {
+  return outlineRate((at) => popContours(to, at), progress);
+}
+
+/**
+ * How fast the shape drawn by `frameAt` visibly moves per unit of progress, at `progress`: the
+ * root-mean-square, over the drawn outline, of each vertex's velocity perpendicular to the
+ * outline, weighted by the length of outline the vertex stands for (half of each adjacent edge).
+ * Canonical units per unit of progress.
  *
  * This is spec 03 #7's definition of visible speed, which its velocity-continuity check grades
  * against with its own implementation. Motion *along* the outline redraws the same shape, so it
  * doesn't count; zero-length contours (collapsed or not-yet-grown placeholders) draw nothing and
- * weigh nothing. Returns 0 when nothing is drawn.
+ * weigh nothing. Returns 0 when nothing is drawn. `frameAt` must give the same contour structure
+ * (ids, point counts) at nearby progress values.
  */
-export function visibleRate(from: Contour[], to: Contour[], progress: number): number {
-  const before = interpolate(from, to, progress - DERIVATIVE_STEP);
-  const now = interpolate(from, to, progress);
-  const after = interpolate(from, to, progress + DERIVATIVE_STEP);
+function outlineRate(frameAt: (progress: number) => Contour[], progress: number): number {
+  const before = frameAt(progress - DERIVATIVE_STEP);
+  const now = frameAt(progress);
+  const after = frameAt(progress + DERIVATIVE_STEP);
   let weightedSquares = 0;
   let totalLength = 0;
-  // `interpolate`'s output tree and point counts don't depend on progress, so the three frames
-  // line up index for index.
+  // `frameAt`'s output tree and point counts don't depend on progress, so the three frames line up
+  // index for index.
   for (const [index, contour] of now.entries()) {
     const points = contour.points;
     const earlier = (before[index] as Contour).points;

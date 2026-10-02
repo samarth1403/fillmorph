@@ -6,9 +6,10 @@ export default defineConfig({
     alias: [
       { find: /^fillmorph$/, replacement: "/src/core/index.ts" },
       { find: /^fillmorph\/dom$/, replacement: "/src/dom/index.ts" },
+      { find: /^fillmorph\/react$/, replacement: "/src/react/index.ts" },
     ],
   },
   test: {
-    include: ["src/**/*.test.{ts,tsx}", "harness/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}", "harness/**/*.test.ts", "demo/**/*.test.{ts,tsx}"],
   },
 });

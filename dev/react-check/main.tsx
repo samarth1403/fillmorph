@@ -20,13 +20,13 @@ function label(name: FixtureName): string {
   return name.replace(/^fa-/, "");
 }
 
-function IconButtons({
+const IconButtons = ({
   current,
   onPick,
 }: {
   current: string | null;
   onPick: (name: FixtureName) => void;
-}): ReactElement {
+}): ReactElement => {
   return (
     <div className="buttons">
       {FIXTURE_LIST.map((name) => (
@@ -41,9 +41,9 @@ function IconButtons({
       ))}
     </div>
   );
-}
+};
 
-function UncontrolledSection(): ReactElement {
+const UncontrolledSection = (): ReactElement => {
   const [icon, setIcon] = useState(FIXTURES["fa-solid-heart"]);
   // Bumping the key remounts the component, so a scripted pair starts at rest on its `from`.
   const [mountKey, setMountKey] = useState(0);
@@ -116,13 +116,13 @@ function UncontrolledSection(): ReactElement {
       </div>
     </section>
   );
-}
+};
 
-function ControlledSection({
+const ControlledSection = ({
   controlledRef,
 }: {
   controlledRef: RefObject<FillMorphHandle | null>;
-}): ReactElement {
+}): ReactElement => {
   const [pairName, setPairName] = useState(REFERENCE_PAIRS[0]?.name ?? "");
   const [progress, setProgress] = useState(0);
   const pair =
@@ -167,13 +167,13 @@ function ControlledSection({
       </div>
     </section>
   );
-}
+};
 
-function ImperativeSection({
+const ImperativeSection = ({
   controlledRef,
 }: {
   controlledRef: RefObject<FillMorphHandle | null>;
-}): ReactElement {
+}): ReactElement => {
   const ref = useRef<FillMorphHandle>(null);
   return (
     <section>
@@ -201,9 +201,9 @@ function ImperativeSection({
       </div>
     </section>
   );
-}
+};
 
-function App(): ReactElement {
+const App = (): ReactElement => {
   const controlledRef = useRef<FillMorphHandle>(null);
   return (
     <>
@@ -212,7 +212,7 @@ function App(): ReactElement {
       <ImperativeSection controlledRef={controlledRef} />
     </>
   );
-}
+};
 
 const container = document.getElementById("root");
 if (container === null) throw new Error("dev/react-check/index.html has no #root");

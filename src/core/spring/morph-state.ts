@@ -1,7 +1,8 @@
 import type { Contour } from "../contour";
 import { interpolate } from "../morph/interpolate";
 import { type SpringConfig, type SpringState, stepSpring } from "./step-spring";
-import { visibleRate } from "./visible-rate";
+import { popContours } from "./overshoot";
+import { overshootRate, visibleRate } from "./visible-rate";
 
 /**
  * At rest means within 1e-3 of the target (0.1 canonical units, sub-pixel at any icon size) and
@@ -27,6 +28,12 @@ export type MorphState = {
   contours: Contour[];
   /** True once the spring has come to rest on `to`; `contours` is then `to` itself. */
   isSettled: boolean;
+  /**
+   * True once this leg's spring has reached position 1 (spec 05's fourth reopen). From then on the
+   * leg draws only its target, popped by the spring's overshoot or undershoot, and never
+   * interpolates from `from` again. A retarget starts a new leg with this false.
+   */
+  hasArrived: boolean;
 };
 
 /**
@@ -41,12 +48,25 @@ export function startMorph(from: Contour[], to: Contour[]): MorphState {
     spring: { position: 0, velocity: 0 },
     contours: interpolate(from, to, 0),
     isSettled: false,
+    hasArrived: false,
   };
 }
 
 /**
  * Advances a morph by `dt` seconds: steps the spring toward 1 with `stepSpring`, then gives the
  * shape at the new position with `interpolate`.
+ *
+ * The spring's own position may overshoot past 1 (or dip below 0) on an underdamped config, but
+ * `interpolate` can't take progress outside [0, 1]: past 1 a collapsing hole passes through its
+ * collapse point and regrows inside out. So (spec 05's overshoot reopens, for spec 08's Bouncy
+ * preset):
+ * - **once the leg has arrived** (its spring first reached 1, latched in `hasArrived`), it draws
+ *   only its exact `to`, scaled about its center by `popContours`: up slightly while the spring
+ *   overshoots, down slightly when it swings back below 1. The bounce stays visible while the
+ *   geometry is the target's, with no zero-area placeholders for a retarget to start from, and
+ *   the `from` shape never comes back mid-bounce (spec 05's fourth reopen: drawing by position
+ *   alone slid the shape back toward `from` on every undershoot);
+ * - **below 0, before arriving**, it holds its `from` shape (`interpolate` at 0).
  *
  * Settling: once within `REST_POSITION_TOLERANCE` of 1 and slower than `REST_VELOCITY_TOLERANCE`,
  * the spring snaps to exactly 1 at rest and `contours` becomes the leg's `to` itself — not
@@ -66,14 +86,19 @@ export function advanceMorph(state: MorphState, config: SpringConfig, dt: number
       spring: { position: 1, velocity: 0 },
       contours: state.to,
       isSettled: true,
+      hasArrived: true,
     };
   }
+  const hasArrived = state.hasArrived || spring.position >= 1;
   return {
     from: state.from,
     to: state.to,
     spring,
-    contours: interpolate(state.from, state.to, spring.position),
+    contours: hasArrived
+      ? popContours(state.to, spring.position)
+      : interpolate(state.from, state.to, Math.max(0, spring.position)),
     isSettled: false,
+    hasArrived,
   };
 }
 
@@ -90,7 +115,11 @@ export function advanceMorph(state: MorphState, config: SpringConfig, dt: number
  * factor comes out as 1/(1 − position), and a spring's motion scales exactly.
  *
  * - **At rest** (settled, stopped, or not yet moving), or when the old leg wasn't visibly moving,
- *   the new velocity is 0.
+ *   the new velocity is 0, as it is below position 0 before arriving, where `advanceMorph` holds
+ *   the shape still.
+ * - **Once the old leg has arrived**, its visible rate is the pop's (`overshootRate`), above or
+ *   below 1: the motion on screen there is the target swelling or shrinking, so that is what
+ *   carries over.
  * - **Capped at the spring's natural frequency** √(stiffness / mass), keeping its sign. A new leg
  *   that barely moves the shape (a target almost where the shape already is) would otherwise
  *   need an unbounded velocity, infinite for one that doesn't move it at all. The cap is exactly
@@ -108,13 +137,16 @@ export function retargetMorph(state: MorphState, to: Contour[], config: SpringCo
     spring: { position: 0, velocity: carriedVelocity(state, to, config) },
     contours: interpolate(state.contours, to, 0),
     isSettled: false,
+    hasArrived: false,
   };
 }
 
 function carriedVelocity(state: MorphState, to: Contour[], config: SpringConfig): number {
   const { velocity, position } = state.spring;
-  if (velocity === 0) return 0;
-  const oldRate = visibleRate(state.from, state.to, position);
+  if (velocity === 0 || (position < 0 && !state.hasArrived)) return 0;
+  const oldRate = state.hasArrived
+    ? overshootRate(state.to, position)
+    : visibleRate(state.from, state.to, position);
   if (oldRate === 0) return 0;
   const cap = Math.sqrt(config.stiffness / config.mass);
   const newRate = visibleRate(state.contours, to, 0);
