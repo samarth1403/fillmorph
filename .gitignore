@@ -14,3 +14,4 @@ demo/dist/
 # Kept local until v1 works (see context/progress-tracker.md)
 context/
 CLAUDE.md
+.claude

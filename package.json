@@ -27,6 +27,7 @@
     "url": "https://github.com/samarth1403/fillmorph/issues"
   },
   "type": "module",
+  "packageManager": "pnpm@11.9.0",
   "sideEffects": false,
   "exports": {
     ".": {
