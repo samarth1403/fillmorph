@@ -14,6 +14,7 @@
       "!demo/ui-pairs",
       "!demo/public",
       "!demo/src/assets",
+      "!demo/src/snippets/*.svg",
       "!demo/src/snippets/generated-example.tsx",
       "!demo/src/snippets/generated-example-vanilla.ts",
       "!**/.tmp",

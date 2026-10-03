@@ -1,6 +1,8 @@
-import reactCode from "./like-button.tsx?raw";
 import { JS_MARK, REACT_MARK } from "../sections/framework-mark";
+import reactCode from "./like-button.tsx?raw";
 import vanillaCode from "./like-button-vanilla.ts?raw";
+import lockToggleCode from "./lock-toggle.tsx?raw";
+import soundToggleCode from "./sound-toggle.tsx?raw";
 
 /** One tab of the "Get started" code: a real source file, type-checked with the demo. */
 export type Snippet = {
@@ -27,3 +29,16 @@ export const SNIPPETS: readonly Snippet[] = [
     mark: JS_MARK,
   },
 ];
+
+/** A source file the icon-input section shows next to its live example. */
+export type IconInputSnippet = { file: string; code: string };
+
+/**
+ * The icon-input section's two listings (spec 09): an icon element passed straight in, and SVG
+ * markup imported with `?raw`. Each is the source of the component that section renders live, so
+ * the code shown is the code running.
+ */
+export const ICON_INPUT_SNIPPETS: Readonly<Record<"element" | "markup", IconInputSnippet>> = {
+  element: { file: "LockToggle.tsx", code: lockToggleCode.trimEnd() },
+  markup: { file: "SoundToggle.tsx", code: soundToggleCode.trimEnd() },
+};

@@ -1,6 +1,7 @@
 import { parseIcon, renderContours } from "fillmorph";
 import { createMorphDriver } from "fillmorph/dom";
-import { heartOutline, heartSolid } from "./icons"; // <svg> markup strings
+import heartOutline from "./heart-outline.svg?raw"; // ?raw: the SVG's markup, not its URL
+import heartSolid from "./heart-solid.svg?raw";
 
 const path = document.querySelector("#like path") as SVGPathElement; // in <svg viewBox="0 0 100 100">
 const outline = parseIcon(heartOutline).contours;

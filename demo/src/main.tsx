@@ -7,6 +7,7 @@ import { createRoot } from "react-dom/client";
 import { ALL_ICONS } from "./catalog";
 import { GetStarted } from "./sections/get-started";
 import { Hero } from "./sections/hero";
+import { IconInput } from "./sections/icon-input";
 import { IconWall } from "./sections/icon-wall";
 import { Nav } from "./sections/nav";
 import { Playground } from "./sections/playground";
@@ -15,7 +16,8 @@ import { UseCases } from "./sections/use-cases";
 
 /**
  * The demo site (spec 08 #1, §1a, §1b), built with `fillmorph/react`'s `<FillMorph>` throughout:
- * hero, swap vs. morph, playground, use cases, icon wall, get started. Fonts are bundled locally
+ * hero, swap vs. morph, playground, use cases, icon wall, icon input (spec 09), get started. Fonts
+ * are bundled locally
  * (`@fontsource`), so the page makes no external requests.
  */
 
@@ -24,12 +26,15 @@ const Section = ({
   eyebrow,
   title,
   lede,
+  isCompact = false,
   children,
 }: {
   id: string;
   eyebrow: string;
   title: string;
   lede: ReactNode;
+  /** A tighter header (wider lede, less space above the content), for a secondary section. */
+  isCompact?: boolean;
   children: ReactNode;
 }): ReactElement => {
   return (
@@ -38,7 +43,7 @@ const Section = ({
       aria-labelledby={`${id}-title`}
       className="mx-auto max-w-[84rem] scroll-mt-16 px-4 py-12 sm:px-6 sm:py-16"
     >
-      <div className="mb-8 max-w-2xl">
+      <div className={isCompact ? "mb-5 max-w-3xl" : "mb-8 max-w-2xl"}>
         <p className="text-sm font-semibold text-orange-600 dark:text-orange-400">{eyebrow}</p>
         <h2
           id={`${id}-title`}
@@ -85,6 +90,15 @@ const Page = (): ReactElement => {
           lede={`All ${ALL_ICONS.length} icons here are unmodified Font Awesome Free SVGs, parsed in your browser. Every pair of them morphs cleanly: each was checked against all the others. Click any of them.`}
         >
           <IconWall />
+        </Section>
+        <Section
+          id="icon-input"
+          isCompact
+          eyebrow="Icon input"
+          title="Strings or elements."
+          lede="Hand it an icon element from the library you already use, or an SVG file's markup as a string. Both are held to the same rules: a stroke icon is turned away either way."
+        >
+          <IconInput />
         </Section>
         <Section
           id="start"

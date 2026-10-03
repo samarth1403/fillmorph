@@ -1,13 +1,27 @@
 import { type ReactElement, useMemo, useState } from "react";
 import { highlight } from "../highlight";
-import { type Snippet, SNIPPETS } from "../snippets";
+import { SNIPPETS, type Snippet } from "../snippets";
 import { CopyButton, CopyCommand } from "./copy-command";
 import { FrameworkMark } from "./framework-mark";
 
-const CodeBlock = ({ snippet }: { snippet: Snippet }): ReactElement => {
-  const tokens = useMemo(() => highlight(snippet.code), [snippet.code]);
+/**
+ * A highlighted code listing, as the code tabs here and the icon-input section show one. Full
+ * width, long lines scroll; `isWrapped` (for narrow cards, where a scrollbar may not even show)
+ * wraps them instead, so no line can run off the edge unread. Copying always takes the original.
+ */
+export const CodeBlock = ({
+  code,
+  isWrapped = false,
+}: {
+  code: string;
+  isWrapped?: boolean;
+}): ReactElement => {
+  const tokens = useMemo(() => highlight(code), [code]);
+  const layout = isWrapped
+    ? "whitespace-pre-wrap px-4 py-3.5 text-[12.5px] leading-5 [overflow-wrap:anywhere]"
+    : "p-5 text-[13px] leading-6 sm:p-6 sm:text-sm";
   return (
-    <pre className="overflow-x-auto p-5 font-mono text-[13px] leading-6 text-neutral-800 sm:p-6 sm:text-sm dark:text-neutral-200">
+    <pre className={`overflow-x-auto font-mono text-neutral-800 dark:text-neutral-200 ${layout}`}>
       <code>
         {tokens.map((token, index) =>
           token.kind === null ? (
@@ -80,7 +94,7 @@ export const GetStarted = (): ReactElement => {
             </span>
           </div>
           <div id="code-panel" role="tabpanel" aria-labelledby={`code-tab-${active.id}`}>
-            <CodeBlock snippet={active} />
+            <CodeBlock code={active.code} />
           </div>
         </div>
       </div>
