@@ -15,7 +15,7 @@ export const CANONICAL_VIEW_BOX: Readonly<ViewBox> = Object.freeze({
 
 /** A uniform scale plus translation from an icon's original `viewBox` to the canonical frame. */
 export type CanonicalMapping = {
-  /** Canonical units per original user unit — the same on both axes. */
+  /** Canonical units per original user unit - the same on both axes. */
   scale: number;
   toCanonical: (point: Point) => Point;
 };
@@ -38,7 +38,8 @@ export type CanonicalMapping = {
  * Expects a viewBox with positive width and height, which stage 2 guarantees.
  */
 export function createCanonicalMapping(viewBox: ViewBox): CanonicalMapping {
-  const scale = CANONICAL_VIEW_BOX.width / Math.max(viewBox.width, viewBox.height);
+  const scale =
+    CANONICAL_VIEW_BOX.width / Math.max(viewBox.width, viewBox.height);
   const offsetX = (CANONICAL_VIEW_BOX.width - viewBox.width * scale) / 2;
   const offsetY = (CANONICAL_VIEW_BOX.height - viewBox.height * scale) / 2;
   return {

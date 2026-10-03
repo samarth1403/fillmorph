@@ -1,7 +1,11 @@
 import type { Contour, Point } from "fillmorph";
 import type { Frame } from "../frames.ts";
 import { crossingPoint, formatNumber, segmentsCross } from "../geometry.ts";
-import { type CheckFailure, type CheckResult, checkResult } from "./check-result.ts";
+import {
+  type CheckFailure,
+  type CheckResult,
+  checkResult,
+} from "./check-result.ts";
 
 type Crossing = { edgeA: number; edgeB: number; at: Point };
 
@@ -25,20 +29,30 @@ function findCrossings(points: readonly Point[]): Crossing[] {
         continue;
       }
       if (segmentsCross(a1, a2, b1, b2)) {
-        crossings.push({ edgeA: a, edgeB: b, at: crossingPoint(a1, a2, b1, b2) });
+        crossings.push({
+          edgeA: a,
+          edgeB: b,
+          at: crossingPoint(a1, a2, b1, b2),
+        });
       }
     }
   }
   return crossings;
 }
 
-function describe(contour: Contour, frame: Frame, crossings: Crossing[]): string {
+function describe(
+  contour: Contour,
+  frame: Frame,
+  crossings: Crossing[],
+): string {
   const [first] = crossings as [Crossing];
   const count = contour.points.length;
   return (
-    `${frame.label}: contour ${contour.id} self-intersects — edges ${first.edgeA}–${(first.edgeA + 1) % count}` +
+    `${frame.label}: contour ${contour.id} self-intersects - edges ${first.edgeA}–${(first.edgeA + 1) % count}` +
     ` and ${first.edgeB}–${(first.edgeB + 1) % count} cross at (${formatNumber(first.at.x)}, ${formatNumber(first.at.y)})` +
-    (crossings.length > 1 ? ` (${crossings.length} crossings in this contour)` : "")
+    (crossings.length > 1
+      ? ` (${crossings.length} crossings in this contour)`
+      : "")
   );
 }
 

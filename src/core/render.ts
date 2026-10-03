@@ -10,7 +10,7 @@ const ROUNDING = 10 ** DECIMAL_PLACES;
 
 /**
  * Renders contours as one SVG path `d` string: one closed `M … L … Z` subpath per contour, in
- * array order. Pure geometry only — no `viewBox`, size or color; placing the path in an `<svg>`
+ * array order. Pure geometry only - no `viewBox`, size or color; placing the path in an `<svg>`
  * is the caller's job, and the viewBox to use for canonical-frame contours is
  * `CANONICAL_VIEW_BOX`.
  *
@@ -28,7 +28,8 @@ export function renderContours(contours: readonly Contour[]): string {
     const [first, ...rest] = contour.points;
     if (first === undefined) continue;
     let subpath = `M${formatNumber(first.x)} ${formatNumber(first.y)}`;
-    for (const point of rest) subpath += `L${formatNumber(point.x)} ${formatNumber(point.y)}`;
+    for (const point of rest)
+      subpath += `L${formatNumber(point.x)} ${formatNumber(point.y)}`;
     subpaths.push(`${subpath}Z`);
   }
   return subpaths.join("");

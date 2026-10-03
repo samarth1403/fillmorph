@@ -1,7 +1,7 @@
 import { FillmorphMarkupError } from "../errors";
 import type { ViewBox } from "../icon";
 
-/** One element of the parsed SVG tree. Text content is not kept — only tags and attributes. */
+/** One element of the parsed SVG tree. Text content is not kept - only tags and attributes. */
 export type SvgElement = {
   name: string;
   attributes: ReadonlyMap<string, string>;
@@ -141,8 +141,12 @@ export function readPresentationValue(
   element: SvgElement,
   property: string,
 ): PresentationValue | undefined {
-  const fromStyle = readStyleDeclaration(element.attributes.get("style"), property);
-  if (fromStyle !== undefined && fromStyle !== "") return { value: fromStyle, via: "style" };
+  const fromStyle = readStyleDeclaration(
+    element.attributes.get("style"),
+    property,
+  );
+  if (fromStyle !== undefined && fromStyle !== "")
+    return { value: fromStyle, via: "style" };
   const fromAttribute = element.attributes.get(property)?.trim();
   if (fromAttribute !== undefined && fromAttribute !== "") {
     return { value: fromAttribute, via: "attribute" };
@@ -156,8 +160,15 @@ export function readPresentationValue(
  * default. On each element an inline `style` declaration beats the presentation attribute, as
  * in CSS. `inherit` defers to the next ancestor.
  */
-function resolvePaint(path: SvgElement, property: "fill" | "stroke"): ResolvedPaint {
-  for (let element: SvgElement | undefined = path; element; element = element.parent) {
+function resolvePaint(
+  path: SvgElement,
+  property: "fill" | "stroke",
+): ResolvedPaint {
+  for (
+    let element: SvgElement | undefined = path;
+    element;
+    element = element.parent
+  ) {
     const value = readPresentationValue(element, property)?.value;
     if (value !== undefined && value.toLowerCase() !== "inherit") {
       return { value, source: element };
@@ -166,7 +177,10 @@ function resolvePaint(path: SvgElement, property: "fill" | "stroke"): ResolvedPa
   return { value: PAINT_DEFAULTS[property], source: undefined };
 }
 
-function readStyleDeclaration(style: string | undefined, property: string): string | undefined {
+function readStyleDeclaration(
+  style: string | undefined,
+  property: string,
+): string | undefined {
   if (style === undefined) return undefined;
   let found: string | undefined;
   for (const declaration of style.split(";")) {
@@ -191,7 +205,9 @@ function parseXmlTree(source: string): SvgElement {
 
   const fail: (message: string) => never = (message) => {
     const line = text.slice(0, i).split("\n").length;
-    throw new FillmorphMarkupError(`Malformed SVG markup (line ${line}): ${message}`);
+    throw new FillmorphMarkupError(
+      `Malformed SVG markup (line ${line}): ${message}`,
+    );
   };
   const skipPast = (terminator: string, what: string): void => {
     const end = text.indexOf(terminator, i);
@@ -220,7 +236,8 @@ function parseXmlTree(source: string): SvgElement {
       i += 9;
       skipPast("]]>", "CDATA section (missing ]]>)");
     } else if (text.startsWith("<!DOCTYPE", i)) {
-      if (root || stack.length > 0) fail("<!DOCTYPE> must come before the root element.");
+      if (root || stack.length > 0)
+        fail("<!DOCTYPE> must come before the root element.");
       skipDoctype();
     } else if (text.startsWith("<?", i)) {
       i += 2;
@@ -233,7 +250,8 @@ function parseXmlTree(source: string): SvgElement {
       i++;
       const open = stack.pop();
       if (!open) fail(`closing tag </${name}> has no matching opening tag.`);
-      else if (open.name !== name) fail(`<${open.name}> is closed by </${name}>.`);
+      else if (open.name !== name)
+        fail(`<${open.name}> is closed by </${name}>.`);
     } else if (text[i] === "<") {
       i++;
       if (root && stack.length === 0) fail("more than one root element.");
@@ -252,7 +270,8 @@ function parseXmlTree(source: string): SvgElement {
     }
   }
 
-  if (stack.length > 0) fail(`<${stack[stack.length - 1]?.name}> is never closed.`);
+  if (stack.length > 0)
+    fail(`<${stack[stack.length - 1]?.name}> is never closed.`);
   if (!root) return fail("no root element found.");
   return root;
 
@@ -270,10 +289,12 @@ function parseXmlTree(source: string): SvgElement {
         return { node: attach(name, attributes), isSelfClosing: false };
       }
       if (i >= text.length) fail(`<${name}> tag is never finished.`);
-      if (!hadWhitespace) fail(`expected whitespace between attributes in <${name}>.`);
+      if (!hadWhitespace)
+        fail(`expected whitespace between attributes in <${name}>.`);
       const attributeName = readName(`an attribute name in <${name}>`);
       skipWhitespace();
-      if (text[i] !== "=") fail(`attribute "${attributeName}" in <${name}> has no value.`);
+      if (text[i] !== "=")
+        fail(`attribute "${attributeName}" in <${name}> has no value.`);
       i++;
       skipWhitespace();
       const quote = text[i];
@@ -281,9 +302,11 @@ function parseXmlTree(source: string): SvgElement {
         fail(`attribute "${attributeName}" in <${name}> is not quoted.`);
       }
       const end = text.indexOf(quote, i + 1);
-      if (end === -1) fail(`attribute "${attributeName}" in <${name}> is never closed.`);
+      if (end === -1)
+        fail(`attribute "${attributeName}" in <${name}> is never closed.`);
       const raw = text.slice(i + 1, end);
-      if (raw.includes("<")) fail(`attribute "${attributeName}" in <${name}> contains "<".`);
+      if (raw.includes("<"))
+        fail(`attribute "${attributeName}" in <${name}> contains "<".`);
       if (attributes.has(attributeName)) {
         fail(`attribute "${attributeName}" appears twice in <${name}>.`);
       }

@@ -6,7 +6,7 @@ import { overshootRate, visibleRate } from "./visible-rate";
 
 /**
  * At rest means within 1e-3 of the target (0.1 canonical units, sub-pixel at any icon size) and
- * slower than 1e-2 progress units per second — the same thresholds spec 03's playback harness
+ * slower than 1e-2 progress units per second - the same thresholds spec 03's playback harness
  * judges settling by.
  */
 const REST_POSITION_TOLERANCE = 1e-3;
@@ -69,12 +69,16 @@ export function startMorph(from: Contour[], to: Contour[]): MorphState {
  * - **below 0, before arriving**, it holds its `from` shape (`interpolate` at 0).
  *
  * Settling: once within `REST_POSITION_TOLERANCE` of 1 and slower than `REST_VELOCITY_TOLERANCE`,
- * the spring snaps to exactly 1 at rest and `contours` becomes the leg's `to` itself — not
+ * the spring snaps to exactly 1 at rest and `contours` becomes the leg's `to` itself - not
  * `interpolate(from, to, 1)`, which would still carry zero-area contours for anything that
  * disappeared. A settled state stays settled. Throws `RangeError` for an invalid `config` or `dt`
  * (see `stepSpring`).
  */
-export function advanceMorph(state: MorphState, config: SpringConfig, dt: number): MorphState {
+export function advanceMorph(
+  state: MorphState,
+  config: SpringConfig,
+  dt: number,
+): MorphState {
   const spring = stepSpring(state.spring, config, 1, dt);
   if (
     Math.abs(spring.position - 1) <= REST_POSITION_TOLERANCE &&
@@ -130,7 +134,11 @@ export function advanceMorph(state: MorphState, config: SpringConfig, dt: number
  * Applies identically however many times it's chained. Throws, as `interpolate` does, if `to`
  * isn't a coherent contour tree.
  */
-export function retargetMorph(state: MorphState, to: Contour[], config: SpringConfig): MorphState {
+export function retargetMorph(
+  state: MorphState,
+  to: Contour[],
+  config: SpringConfig,
+): MorphState {
   return {
     from: state.contours,
     to,
@@ -141,7 +149,11 @@ export function retargetMorph(state: MorphState, to: Contour[], config: SpringCo
   };
 }
 
-function carriedVelocity(state: MorphState, to: Contour[], config: SpringConfig): number {
+function carriedVelocity(
+  state: MorphState,
+  to: Contour[],
+  config: SpringConfig,
+): number {
   const { velocity, position } = state.spring;
   if (velocity === 0 || (position < 0 && !state.hasArrived)) return 0;
   const oldRate = state.hasArrived
@@ -151,6 +163,8 @@ function carriedVelocity(state: MorphState, to: Contour[], config: SpringConfig)
   const cap = Math.sqrt(config.stiffness / config.mass);
   const newRate = visibleRate(state.contours, to, 0);
   const converted =
-    newRate === 0 ? Number.POSITIVE_INFINITY : (Math.abs(velocity) * oldRate) / newRate;
+    newRate === 0
+      ? Number.POSITIVE_INFINITY
+      : (Math.abs(velocity) * oldRate) / newRate;
   return Math.sign(velocity) * Math.min(converted, cap);
 }

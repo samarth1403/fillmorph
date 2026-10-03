@@ -89,7 +89,8 @@ export function parsePathData(d: string): Subpath[] {
     const match = NUMBER_PATTERN.exec(d);
     if (!match) return fail(`expected a number at "${d.slice(i, i + 12)}"`);
     const value = Number(match[0]);
-    if (!Number.isFinite(value)) return fail(`number "${match[0]}" is out of range`);
+    if (!Number.isFinite(value))
+      return fail(`number "${match[0]}" is out of range`);
     i = NUMBER_PATTERN.lastIndex;
     return value;
   };
@@ -122,13 +123,16 @@ export function parsePathData(d: string): Subpath[] {
       return fail(
         command === undefined
           ? `path data must start with a move-to command ("M" or "m"), not "${char}"`
-          : `unexpected "${char}" — expected a command letter`,
+          : `unexpected "${char}" - expected a command letter`,
       );
     }
-    if (PARAMETER_COUNTS[char.toUpperCase()] === undefined) fail(`unknown command "${char}"`);
+    if (PARAMETER_COUNTS[char.toUpperCase()] === undefined)
+      fail(`unknown command "${char}"`);
     const upper = char.toUpperCase();
     if (command === undefined && upper !== "M") {
-      fail(`path data must start with a move-to command ("M" or "m"), not "${char}"`);
+      fail(
+        `path data must start with a move-to command ("M" or "m"), not "${char}"`,
+      );
     }
     command = char;
     const isRelative = command !== upper;
@@ -166,15 +170,26 @@ export function parsePathData(d: string): Subpath[] {
       } else if (upper === "L") {
         addSegment({ kind: "line", to: at(0) });
       } else if (upper === "H") {
-        addSegment({ kind: "line", to: { x: base.x + (params[0] as number), y: current.y } });
+        addSegment({
+          kind: "line",
+          to: { x: base.x + (params[0] as number), y: current.y },
+        });
       } else if (upper === "V") {
         addSegment({
           kind: "line",
-          to: { x: current.x, y: (isRelative ? current.y : 0) + (params[0] as number) },
+          to: {
+            x: current.x,
+            y: (isRelative ? current.y : 0) + (params[0] as number),
+          },
         });
       } else if (upper === "C") {
         cubicCtrl = at(2);
-        addSegment({ kind: "cubic", ctrl1: at(0), ctrl2: cubicCtrl, to: at(4) });
+        addSegment({
+          kind: "cubic",
+          ctrl1: at(0),
+          ctrl2: cubicCtrl,
+          to: at(4),
+        });
       } else if (upper === "S") {
         cubicCtrl = at(0);
         addSegment({
@@ -213,7 +228,9 @@ export function parsePathData(d: string): Subpath[] {
     skipWhitespace();
   }
 
-  return subpaths.filter((candidate) => candidate.segments.length > 0 || candidate.hasClosePath);
+  return subpaths.filter(
+    (candidate) => candidate.segments.length > 0 || candidate.hasClosePath,
+  );
 
   function readParameters(upper: string): number[] {
     const count = PARAMETER_COUNTS[upper] as number;
@@ -233,9 +250,18 @@ export function parsePathData(d: string): Subpath[] {
 /** Reflects a previous control point through `current`; without one, the control is `current`. */
 function reflect(previousCtrl: Point | undefined, current: Point): Point {
   if (!previousCtrl) return current;
-  return { x: 2 * current.x - previousCtrl.x, y: 2 * current.y - previousCtrl.y };
+  return {
+    x: 2 * current.x - previousCtrl.x,
+    y: 2 * current.y - previousCtrl.y,
+  };
 }
 
 function isPathWhitespace(code: number): boolean {
-  return code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d || code === 0x0c;
+  return (
+    code === 0x20 ||
+    code === 0x09 ||
+    code === 0x0a ||
+    code === 0x0d ||
+    code === 0x0c
+  );
 }

@@ -45,16 +45,28 @@ function writeOutput(fileName: string, html: string): string {
 function parseNumbers(option: string, value: string | undefined): number[] {
   const parts = (value ?? "").split(",").map((part) => part.trim());
   const steps = parts.map(Number);
-  if (parts.some((part) => part === "") || steps.some((step) => !Number.isFinite(step))) {
-    throw new Error(`${option} needs comma-separated numbers, got "${value ?? ""}"`);
+  if (
+    parts.some((part) => part === "") ||
+    steps.some((step) => !Number.isFinite(step))
+  ) {
+    throw new Error(
+      `${option} needs comma-separated numbers, got "${value ?? ""}"`,
+    );
   }
   return steps;
 }
 
 function parseSpring(value: string | undefined): SpringConfig {
   const [stiffness, damping, mass, ...rest] = parseNumbers("--spring", value);
-  if (stiffness === undefined || damping === undefined || mass === undefined || rest.length > 0) {
-    throw new Error(`--spring needs stiffness,damping,mass, got "${value ?? ""}"`);
+  if (
+    stiffness === undefined ||
+    damping === undefined ||
+    mass === undefined ||
+    rest.length > 0
+  ) {
+    throw new Error(
+      `--spring needs stiffness,damping,mass, got "${value ?? ""}"`,
+    );
   }
   return { stiffness, damping, mass };
 }
@@ -70,14 +82,18 @@ function runIconVet(directory: string | undefined): boolean {
     markup: readFileSync(`${directory}/${file}`, "utf8"),
   }));
   const result = vetIcons(icons);
-  for (const { name, reason } of result.rejected) console.log(`REJECT  ${name}: ${reason}`);
+  for (const { name, reason } of result.rejected)
+    console.log(`REJECT  ${name}: ${reason}`);
   for (const pair of result.failingPairs.slice(0, 50)) {
     console.log(`FAIL    ${pair.from} → ${pair.to}: ${pair.checks.join(", ")}`);
   }
   if (result.failingPairs.length > 50) {
-    console.log(`        … and ${result.failingPairs.length - 50} more failing pairs`);
+    console.log(
+      `        … and ${result.failingPairs.length - 50} more failing pairs`,
+    );
   }
-  const isClean = result.rejected.length === 0 && result.failingPairs.length === 0;
+  const isClean =
+    result.rejected.length === 0 && result.failingPairs.length === 0;
   console.log(
     `${isClean ? "PASS" : "FAIL"}  vet-icons ${directory}: ${icons.length} icons, ` +
       `${result.rejected.length} rejected, ${result.failingPairs.length} of ${result.pairCount} ordered pairs failing`,
@@ -91,7 +107,8 @@ function main(args: readonly string[]): number {
     return args.length === 0 ? 1 : 0;
   }
   if (args.includes("--list")) {
-    for (const pair of REFERENCE_PAIRS) console.log(`${pair.name}  (${pair.covers})`);
+    for (const pair of REFERENCE_PAIRS)
+      console.log(`${pair.name}  (${pair.covers})`);
     return 0;
   }
 
@@ -105,7 +122,8 @@ function main(args: readonly string[]): number {
     const arg = args[index] as string;
     if (arg === "--all") pairs.push(...REFERENCE_PAIRS);
     else if (arg === "--dense") progressSteps = DENSE_PROGRESS_STEPS;
-    else if (arg === "--steps") progressSteps = parseNumbers("--steps", args[++index]);
+    else if (arg === "--steps")
+      progressSteps = parseNumbers("--steps", args[++index]);
     else if (arg === "--round-trip") isRoundTrip = true;
     else if (arg === "--playback") isPlayback = true;
     else if (arg === "--vet-icons") vetDirectories.push(args[++index] ?? "");
@@ -113,7 +131,9 @@ function main(args: readonly string[]): number {
     else {
       const pair = findPair(arg);
       if (pair === undefined) {
-        console.error(`Unknown pair or option "${arg}". Run with --list to see pair names.`);
+        console.error(
+          `Unknown pair or option "${arg}". Run with --list to see pair names.`,
+        );
         return 1;
       }
       pairs.push(pair);
@@ -122,25 +142,39 @@ function main(args: readonly string[]): number {
   const selected = [...new Set(pairs)];
   let isFailing = false;
 
-  for (const directory of vetDirectories) isFailing ||= !runIconVet(directory || undefined);
+  for (const directory of vetDirectories)
+    isFailing ||= !runIconVet(directory || undefined);
 
   if (isRoundTrip) {
-    const results = FIXTURE_NAMES.map((name) => runRoundTrip(name, loadFixture(name)));
+    const results = FIXTURE_NAMES.map((name) =>
+      runRoundTrip(name, loadFixture(name)),
+    );
     for (const result of results) {
-      console.log(`${result.passed ? "PASS" : "FAIL"}  round-trip  ${result.name}`);
+      console.log(
+        `${result.passed ? "PASS" : "FAIL"}  round-trip  ${result.name}`,
+      );
       for (const problem of result.problems) console.log(`      ${problem}`);
     }
     isFailing ||= results.some((result) => !result.passed);
-    console.log(`→ ${writeOutput("round-trip.html", renderRoundTripPage(results))}`);
+    console.log(
+      `→ ${writeOutput("round-trip.html", renderRoundTripPage(results))}`,
+    );
   }
 
   if (selected.length > 0) {
-    const runs = selected.map((pair) => runPair(pair, interpolate, progressSteps));
+    const runs = selected.map((pair) =>
+      runPair(pair, interpolate, progressSteps),
+    );
     for (const run of runs) {
       const summary = run.checks
-        .map((check) => `${check.check} ${check.passed ? "ok" : `FAIL(${check.failures.length})`}`)
+        .map(
+          (check) =>
+            `${check.check} ${check.passed ? "ok" : `FAIL(${check.failures.length})`}`,
+        )
         .join(", ");
-      console.log(`${run.passed ? "PASS" : "FAIL"}  ${run.pair.name}: ${summary}`);
+      console.log(
+        `${run.passed ? "PASS" : "FAIL"}  ${run.pair.name}: ${summary}`,
+      );
     }
     isFailing ||= runs.some((run) => !run.passed);
     console.log(
@@ -161,16 +195,23 @@ function main(args: readonly string[]): number {
     );
     for (const section of sections) {
       const summary = section.checks
-        .map((check) => `${check.check} ${check.passed ? "ok" : `FAIL(${check.failures.length})`}`)
+        .map(
+          (check) =>
+            `${check.check} ${check.passed ? "ok" : `FAIL(${check.failures.length})`}`,
+        )
         .join(", ");
       const passed = section.checks.every((check) => check.passed);
-      console.log(`${passed ? "PASS" : "FAIL"}  playback ${section.title}: ${summary}`);
+      console.log(
+        `${passed ? "PASS" : "FAIL"}  playback ${section.title}: ${summary}`,
+      );
       isFailing ||= !passed;
     }
     const lede =
-      "Playback runs spec 05's startMorph / advanceMorph / retargetMorph — the same core code fillmorph/dom's createMorphDriver runs — on a simulated 60 Hz clock. " +
+      "Playback runs spec 05's startMorph / advanceMorph / retargetMorph - the same core code fillmorph/dom's createMorphDriver runs - on a simulated 60 Hz clock. " +
       "Each pair is interrupted mid-flight and retargeted to a third icon; the playback replays the recorded simulated frames.";
-    console.log(`→ ${writeOutput("playback.html", renderPlaybackPage(sections, lede))}`);
+    console.log(
+      `→ ${writeOutput("playback.html", renderPlaybackPage(sections, lede))}`,
+    );
   }
 
   return isFailing ? 1 : 0;

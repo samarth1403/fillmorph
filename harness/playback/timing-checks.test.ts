@@ -29,7 +29,9 @@ describe("checkSettling", () => {
   });
 
   it("flags an undamped spring that oscillates forever", () => {
-    const result = checkSettling(runPlayback({ ...base, config: { ...config, damping: 0 } }));
+    const result = checkSettling(
+      runPlayback({ ...base, config: { ...config, damping: 0 } }),
+    );
     expect(result.passed).toBe(false);
     expect(result.settleTime).toBeNull();
     expect(result.failures[0]?.message).toContain("never settled");
@@ -38,22 +40,34 @@ describe("checkSettling", () => {
   it("flags settling that happens, but later than the bound", () => {
     // Overdamped (ζ ≈ 1.6): its slow mode decays at ~1.9/s, reaching 1e-3 after ~3.7 s.
     const sluggish = { stiffness: 30, damping: 18, mass: 1 };
-    const result = checkSettling(runPlayback({ ...base, config: sluggish, duration: 8 }));
+    const result = checkSettling(
+      runPlayback({ ...base, config: sluggish, duration: 8 }),
+    );
     expect(result.passed).toBe(false);
     expect(result.failures[0]?.message).toContain("past the 2s bound");
   });
 
   it("measures from the final leg's start when the run was interrupted", () => {
-    const trace = runPlayback({ ...base, interruption: { atTime: 0.2, to: retargetTo } });
+    const trace = runPlayback({
+      ...base,
+      interruption: { atTime: 0.2, to: retargetTo },
+    });
     const result = checkSettling(trace);
     expect(result.passed).toBe(true);
     // Independently: the first entry from which every later one is settled, in absolute time.
     const settled = trace.entries.map(
-      (entry) => Math.abs(entry.position - 1) <= 1e-3 && Math.abs(entry.velocity) <= 1e-2,
+      (entry) =>
+        Math.abs(entry.position - 1) <= 1e-3 &&
+        Math.abs(entry.velocity) <= 1e-2,
     );
-    const firstSettled = settled.findIndex((_, index) => settled.slice(index).every(Boolean));
+    const firstSettled = settled.findIndex((_, index) =>
+      settled.slice(index).every(Boolean),
+    );
     const absolute = trace.entries[firstSettled]?.time ?? Number.NaN;
-    expect(result.settleTime).toBeCloseTo(absolute - (trace.legs[1]?.startTime ?? Number.NaN), 12);
+    expect(result.settleTime).toBeCloseTo(
+      absolute - (trace.legs[1]?.startTime ?? Number.NaN),
+      12,
+    );
     expect(trace.legs[1]?.startTime).toBeGreaterThan(0.19);
   });
 
@@ -77,7 +91,11 @@ describe("checkVelocityContinuity", () => {
     const result = checkVelocityContinuity(
       runPlayback({
         ...base,
-        interruption: { atTime: 0.2, to: retargetTo, mapVelocity: resetVelocity },
+        interruption: {
+          atTime: 0.2,
+          to: retargetTo,
+          mapVelocity: resetVelocity,
+        },
       }),
     );
     expect(result.passed).toBe(false);
@@ -97,7 +115,10 @@ describe("checkVelocityContinuity", () => {
     });
     expect(checkVelocityContinuity(faulty).passed).toBe(false);
     // Core's own retarget converts the velocity, and passes.
-    const converted = runPlayback({ ...base, interruption: { atTime: 0.2, to: farther } });
+    const converted = runPlayback({
+      ...base,
+      interruption: { atTime: 0.2, to: farther },
+    });
     expect(checkVelocityContinuity(converted).passed).toBe(true);
   });
 
@@ -116,7 +137,11 @@ describe("checkVelocityContinuity", () => {
       runPlayback({
         ...base,
         config: bouncy,
-        interruption: { atTime: 0.2, to: retargetTo, mapVelocity: resetVelocity },
+        interruption: {
+          atTime: 0.2,
+          to: retargetTo,
+          mapVelocity: resetVelocity,
+        },
       }),
     );
     expect(dropped.passed).toBe(false);
@@ -132,14 +157,18 @@ describe("checkVelocityContinuity", () => {
     });
     const before = trace.interruptions[0];
     expect(before?.positionBefore).toBeLessThan(1);
-    expect(trace.entries.some((entry) => entry.leg === 0 && entry.position >= 1)).toBe(true);
+    expect(
+      trace.entries.some((entry) => entry.leg === 0 && entry.position >= 1),
+    ).toBe(true);
     expect(checkVelocityContinuity(trace).passed).toBe(true);
   });
 
   it("passes with a note when the trace has no interruption", () => {
     const result = checkVelocityContinuity(runPlayback(base));
     expect(result.passed).toBe(true);
-    expect(result.notes).toEqual(["no interruption in this trace; nothing to check"]);
+    expect(result.notes).toEqual([
+      "no interruption in this trace; nothing to check",
+    ]);
   });
 });
 
@@ -153,29 +182,46 @@ describe("outlineDisplacement (the visible part of motion)", () => {
       depth: 0,
       points: Array.from({ length: 64 }, (_, index) => {
         const angle = phase - (index / 64) * Math.PI * 2;
-        return { x: 50 + radius * Math.cos(angle), y: 50 + radius * Math.sin(angle) };
+        return {
+          x: 50 + radius * Math.cos(angle),
+          y: 50 + radius * Math.sin(angle),
+        };
       }),
     },
   ];
   const shift = (contours: Contour[], dx: number, dy: number): Contour[] =>
-    contours.map((c) => ({ ...c, points: c.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) }));
+    contours.map((c) => ({
+      ...c,
+      points: c.points.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+    }));
 
   it("ignores points sliding along an outline that doesn't move", () => {
     // Every vertex moves by up to ~0.98 units (a 1/64 turn of the vertex ring), none of it across
     // the outline, apart from the polygon's own chord sag.
     const step = (Math.PI * 2) / 64 / 2;
-    const displacement = outlineDisplacement(circle(20, -step), circle(20), circle(20, step));
+    const displacement = outlineDisplacement(
+      circle(20, -step),
+      circle(20),
+      circle(20, step),
+    );
     expect(displacement).toBeLessThan(0.02);
   });
 
   it("measures growth in full: every point moves straight across the outline", () => {
-    expect(outlineDisplacement(circle(19), circle(20), circle(21))).toBeCloseTo(2, 9);
+    expect(outlineDisplacement(circle(19), circle(20), circle(21))).toBeCloseTo(
+      2,
+      9,
+    );
   });
 
   it("counts a translation's across-the-outline part: a circle moved 2 units scores 2/√2", () => {
     // Around a circle, the normal part of a fixed displacement d is d·cos θ, whose RMS is d/√2.
     const now = circle(20);
-    const displacement = outlineDisplacement(shift(now, -1, 0), now, shift(now, 1, 0));
+    const displacement = outlineDisplacement(
+      shift(now, -1, 0),
+      now,
+      shift(now, 1, 0),
+    );
     expect(displacement).toBeCloseTo(2 / Math.SQRT2, 3);
   });
 
@@ -189,7 +235,11 @@ describe("outlineDisplacement (the visible part of motion)", () => {
     };
     const moved = { ...dot, points: dot.points.map(() => ({ x: 60, y: 50 })) };
     expect(
-      outlineDisplacement([...circle(19), dot], [...circle(20), dot], [...circle(21), moved]),
+      outlineDisplacement(
+        [...circle(19), dot],
+        [...circle(20), dot],
+        [...circle(21), moved],
+      ),
     ).toBeCloseTo(2, 9);
   });
 
@@ -197,7 +247,10 @@ describe("outlineDisplacement (the visible part of motion)", () => {
     // A 10×10 square whose top edge carries 9 extra points, 1 unit apart. Only those 9 move, 2 units
     // straight across the edge: 9 units of a 40-unit outline, so RMS = 2·√(9/40). Counting points
     // instead would give 2·√(9/13).
-    const topEdge = Array.from({ length: 9 }, (_, index) => ({ x: 9 - index, y: 0 }));
+    const topEdge = Array.from({ length: 9 }, (_, index) => ({
+      x: 9 - index,
+      y: 0,
+    }));
     const frame = (dy: number): Contour[] => [
       {
         id: "c0",
@@ -229,11 +282,16 @@ describe("checkPositionContinuity", () => {
     runPlayback({ ...base, interruption: { atTime: 0.2, to: target } });
 
   /** The trace with the new leg's first frame replaced, to forge a discontinuity. */
-  function withFirstFrameAfter(trace: ReturnType<typeof interrupted>, contours: Contour[]) {
+  function withFirstFrameAfter(
+    trace: ReturnType<typeof interrupted>,
+    contours: Contour[],
+  ) {
     const index = trace.entries.findIndex((entry) => entry.leg === 1);
     return {
       ...trace,
-      entries: trace.entries.map((entry, at) => (at === index ? { ...entry, contours } : entry)),
+      entries: trace.entries.map((entry, at) =>
+        at === index ? { ...entry, contours } : entry,
+      ),
     };
   }
 
@@ -244,10 +302,16 @@ describe("checkPositionContinuity", () => {
   });
 
   it("ignores an appearing hole's zero-area placeholder, which draws nothing", () => {
-    const ring = [square("c0", null, 0, 50, 90, 10), square("c1", "c0", 1, 50, 90, 4)];
+    const ring = [
+      square("c0", null, 0, 50, 90, 10),
+      square("c1", "c0", 1, 50, 90, 4),
+    ];
     const trace = interrupted(ring);
     const firstAfter = trace.entries.find((entry) => entry.leg === 1);
-    expect(firstAfter?.contours.map((contour) => contour.id)).toEqual(["c0", "c1"]);
+    expect(firstAfter?.contours.map((contour) => contour.id)).toEqual([
+      "c0",
+      "c1",
+    ]);
     expect(checkPositionContinuity(trace).passed).toBe(true);
   });
 
@@ -257,7 +321,7 @@ describe("checkPositionContinuity", () => {
     expect(result.passed).toBe(false);
     expect(result.failures[0]?.frameIndices).toHaveLength(2);
     expect(result.failures[0]?.message).toMatch(
-      /^t=0\.2s: the new leg's first frame jumps away from the shape on screen — outlines [\d.]+ units apart at/,
+      /^t=0\.2s: the new leg's first frame jumps away from the shape on screen - outlines [\d.]+ units apart at/,
     );
   });
 
@@ -265,7 +329,9 @@ describe("checkPositionContinuity", () => {
     // The old bug: the leg runs from the original icon, not the on-screen snapshot. The frame
     // recorded at the retarget instant is still the snapshot; the jump shows on the next step.
     const trace = interrupted();
-    const legs = trace.legs.map((leg) => (leg.index === 1 ? { ...leg, from } : leg));
+    const legs = trace.legs.map((leg) =>
+      leg.index === 1 ? { ...leg, from } : leg,
+    );
     const result = checkPositionContinuity({ ...trace, legs });
     expect(result.passed).toBe(false);
     expect(result.failures[0]?.message).toMatch(
@@ -275,24 +341,37 @@ describe("checkPositionContinuity", () => {
 
   it("flags a jump just past the tolerance, and passes one just inside it", () => {
     const trace = interrupted();
-    const before = trace.entries.filter((entry) => entry.time === trace.interruptions[0]?.time)[0];
+    const before = trace.entries.filter(
+      (entry) => entry.time === trace.interruptions[0]?.time,
+    )[0];
     const shifted = (offset: number): Contour[] =>
       (before?.contours ?? []).map((contour) => ({
         ...contour,
-        points: contour.points.map((point) => ({ x: point.x + offset, y: point.y })),
+        points: contour.points.map((point) => ({
+          x: point.x + offset,
+          y: point.y,
+        })),
       }));
-    expect(checkPositionContinuity(withFirstFrameAfter(trace, shifted(0.09))).passed).toBe(true);
-    expect(checkPositionContinuity(withFirstFrameAfter(trace, shifted(0.2))).passed).toBe(false);
+    expect(
+      checkPositionContinuity(withFirstFrameAfter(trace, shifted(0.09))).passed,
+    ).toBe(true);
+    expect(
+      checkPositionContinuity(withFirstFrameAfter(trace, shifted(0.2))).passed,
+    ).toBe(false);
   });
 
   it("flags a contour whose fill flips although its outline stays put", () => {
     const trace = interrupted();
-    const before = trace.entries.filter((entry) => entry.time === trace.interruptions[0]?.time)[0];
+    const before = trace.entries.filter(
+      (entry) => entry.time === trace.interruptions[0]?.time,
+    )[0];
     const reversed = (before?.contours ?? []).map((contour) => ({
       ...contour,
       points: [...contour.points].reverse(),
     }));
-    const result = checkPositionContinuity(withFirstFrameAfter(trace, reversed));
+    const result = checkPositionContinuity(
+      withFirstFrameAfter(trace, reversed),
+    );
     expect(result.passed).toBe(false);
     expect(result.failures[0]?.message).toContain("fill flipped");
   });
@@ -300,6 +379,8 @@ describe("checkPositionContinuity", () => {
   it("passes with a note when the trace has no interruption", () => {
     const result = checkPositionContinuity(runPlayback(base));
     expect(result.passed).toBe(true);
-    expect(result.notes).toEqual(["no interruption in this trace; nothing to check"]);
+    expect(result.notes).toEqual([
+      "no interruption in this trace; nothing to check",
+    ]);
   });
 });

@@ -1,6 +1,15 @@
 import { type Contour, interpolate, type Point } from "fillmorph";
-import { type CheckFailure, type CheckResult, checkResult } from "../checks/check-result.ts";
-import { distanceToSegment, formatNumber, polygonArea, signedPolygonArea } from "../geometry.ts";
+import {
+  type CheckFailure,
+  type CheckResult,
+  checkResult,
+} from "../checks/check-result.ts";
+import {
+  distanceToSegment,
+  formatNumber,
+  polygonArea,
+  signedPolygonArea,
+} from "../geometry.ts";
 import { arrivedFlags, poppedTarget } from "./overshoot-rule.ts";
 import type { PlaybackTrace, TraceEntry } from "./runner.ts";
 
@@ -47,13 +56,19 @@ export function checkSettling(
 ): SettlingResult {
   const finalLeg = trace.legs[trace.legs.length - 1];
   const indexed = trace.entries.map((entry, index) => ({ entry, index }));
-  const legEntries = indexed.filter(({ entry }) => entry.leg === finalLeg?.index);
+  const legEntries = indexed.filter(
+    ({ entry }) => entry.leg === finalLeg?.index,
+  );
   const startTime = finalLeg?.startTime ?? 0;
   const last = legEntries[legEntries.length - 1];
   if (last === undefined) {
     return {
       ...checkResult("settling", [
-        { frameIndices: [], contourId: null, message: "the trace has no entries" },
+        {
+          frameIndices: [],
+          contourId: null,
+          message: "the trace has no entries",
+        },
       ]),
       settleTime: null,
     };
@@ -68,7 +83,8 @@ export function checkSettling(
   const settleTime =
     settledFrom === null
       ? null
-      : (legEntries[settledFrom] as (typeof legEntries)[number]).entry.time - startTime;
+      : (legEntries[settledFrom] as (typeof legEntries)[number]).entry.time -
+        startTime;
 
   const failures: CheckFailure[] = [];
   const coverage = last.entry.time - startTime;
@@ -82,7 +98,10 @@ export function checkSettling(
     });
   } else if (settleTime > options.bound) {
     failures.push({
-      frameIndices: [(legEntries[settledFrom as number] as (typeof legEntries)[number]).index],
+      frameIndices: [
+        (legEntries[settledFrom as number] as (typeof legEntries)[number])
+          .index,
+      ],
       contourId: null,
       message: `settled ${formatNumber(settleTime)}s after the final leg started, past the ${options.bound}s bound`,
     });
@@ -95,7 +114,9 @@ export function checkSettling(
     });
   }
   const notes =
-    settleTime === null ? [] : [`settled ${formatNumber(settleTime)}s after the final leg started`];
+    settleTime === null
+      ? []
+      : [`settled ${formatNumber(settleTime)}s after the final leg started`];
   return { ...checkResult("settling", failures, notes), settleTime };
 }
 
@@ -117,7 +138,10 @@ export type ContinuityOptions = {
  * the spring at rest on any such leg, so the ratio of the two speeds carries no information (it
  * was 1e-3 until spec 05's second reopen).
  */
-export const DEFAULT_CONTINUITY: ContinuityOptions = { maxSpeedRatio: 1.5, restSpeed: 1 };
+export const DEFAULT_CONTINUITY: ContinuityOptions = {
+  maxSpeedRatio: 1.5,
+  restSpeed: 1,
+};
 
 /** Step for the numerical derivative of `interpolate` with respect to progress. */
 const DERIVATIVE_STEP = 1e-4;
@@ -156,11 +180,16 @@ export function outlineDisplacement(
     const later = after[index] as Contour;
     const points = contour.points;
     if (earlier.id !== contour.id || later.id !== contour.id) return null;
-    if (earlier.points.length !== points.length || later.points.length !== points.length) {
+    if (
+      earlier.points.length !== points.length ||
+      later.points.length !== points.length
+    ) {
       return null;
     }
     for (const [pointIndex, point] of points.entries()) {
-      const previous = points[(pointIndex - 1 + points.length) % points.length] as Point;
+      const previous = points[
+        (pointIndex - 1 + points.length) % points.length
+      ] as Point;
       const next = points[(pointIndex + 1) % points.length] as Point;
       const tangentX = next.x - previous.x;
       const tangentY = next.y - previous.y;
@@ -172,7 +201,9 @@ export function outlineDisplacement(
       if (tangentLength === 0 || weight === 0) continue;
       const start = earlier.points[pointIndex] as Point;
       const end = later.points[pointIndex] as Point;
-      const across = ((end.x - start.x) * -tangentY + (end.y - start.y) * tangentX) / tangentLength;
+      const across =
+        ((end.x - start.x) * -tangentY + (end.y - start.y) * tangentX) /
+        tangentLength;
       weightedSquares += weight * across * across;
       totalLength += weight;
     }
@@ -184,7 +215,11 @@ export function outlineDisplacement(
  * `outlineDisplacement` of `interpolate(from, to, ·)` around `progress`, per unit of progress: how
  * fast this leg visibly moves the shape for each unit its spring advances.
  */
-function visibleRate(from: Contour[], to: Contour[], progress: number): number | null {
+function visibleRate(
+  from: Contour[],
+  to: Contour[],
+  progress: number,
+): number | null {
   const displacement = outlineDisplacement(
     interpolate(from, to, progress - DERIVATIVE_STEP),
     interpolate(from, to, progress),
@@ -209,7 +244,7 @@ function overshootRate(to: Contour[], progress: number): number | null {
  * just after the retarget must
  * agree within `maxSpeedRatio`. Speed = |velocity| × how fast the leg's geometry moves per unit
  * of progress, so it's measured in the same units on both sides even though each leg has its own
- * progress space — this is what lets it judge spec 05's velocity conversion, not just compare two
+ * progress space - this is what lets it judge spec 05's velocity conversion, not just compare two
  * numbers in different units. Speed is compared, not direction: retargeting turns the motion by
  * design.
  *
@@ -241,7 +276,8 @@ export function checkVelocityContinuity(
     const at = `t=${formatNumber(interruption.time)}s`;
     // The old leg's last entry is the first one recorded at the interruption's time.
     const oldEntry = frameIndices[0];
-    const hasOldLegArrived = oldEntry !== undefined && isArrived[oldEntry] === true;
+    const hasOldLegArrived =
+      oldEntry !== undefined && isArrived[oldEntry] === true;
     const rateBefore = hasOldLegArrived
       ? overshootRate(context.oldTo, context.position)
       : context.position < 0
@@ -264,7 +300,9 @@ export function checkVelocityContinuity(
       continue;
     }
     const ratio = speedAfter / speedBefore;
-    if (!(ratio <= options.maxSpeedRatio && ratio >= 1 / options.maxSpeedRatio)) {
+    if (
+      !(ratio <= options.maxSpeedRatio && ratio >= 1 / options.maxSpeedRatio)
+    ) {
       failures.push({
         frameIndices,
         contourId: null,
@@ -290,7 +328,9 @@ export type PositionContinuityOptions = {
  * check's 1e-3 position tolerance (sub-pixel at any icon size). A correct retarget measures
  * ~1e-13, since the new leg's first frame lays out the very same outline; a jump is tens of units.
  */
-export const DEFAULT_POSITION_CONTINUITY: PositionContinuityOptions = { maxDistance: 0.1 };
+export const DEFAULT_POSITION_CONTINUITY: PositionContinuityOptions = {
+  maxDistance: 0.1,
+};
 
 /** Below this area (canonical units²) a contour draws nothing: e.g. a placeholder point. */
 const INVISIBLE_AREA = 1e-9;
@@ -298,7 +338,10 @@ const INVISIBLE_AREA = 1e-9;
 type FarthestPoint = { distance: number; point: Point };
 
 /** How far `from`'s farthest vertex is from `to`'s nearest outline edge. */
-function farthestFrom(from: readonly Point[][], to: readonly Point[][]): FarthestPoint {
+function farthestFrom(
+  from: readonly Point[][],
+  to: readonly Point[][],
+): FarthestPoint {
   let farthest: FarthestPoint = { distance: 0, point: { x: 0, y: 0 } };
   for (const contour of from) {
     for (const point of contour) {
@@ -323,7 +366,7 @@ function visibleOutlines(contours: readonly Contour[]): Point[][] {
 
 /**
  * Deliverable #7 position-continuity check: at each interruption, the shape on screen just before
- * the retarget must be the shape the new leg starts from — the retarget may turn the motion, never
+ * the retarget must be the shape the new leg starts from - the retarget may turn the motion, never
  * make the shape jump. Two things are compared against the old leg's last frame:
  *
  * - **where the new leg's motion starts:** `interpolate(leg.from, leg.to, 0)` for the new leg as
@@ -361,7 +404,11 @@ export function checkPositionContinuity(
     const [beforeIndex, afterIndex] = frameIndices;
     const before = trace.entries[beforeIndex ?? -1];
     const after = trace.entries[afterIndex ?? -1];
-    if (before === undefined || after === undefined || frameIndices.length !== 2) {
+    if (
+      before === undefined ||
+      after === undefined ||
+      frameIndices.length !== 2
+    ) {
       failures.push({
         frameIndices,
         contourId: null,
@@ -392,7 +439,8 @@ export function checkPositionContinuity(
       }
       largest = Math.max(largest, problem.distance);
     }
-    if (!failed) notes.push(`${at}: outlines ${formatNumber(largest, 6)} units apart`);
+    if (!failed)
+      notes.push(`${at}: outlines ${formatNumber(largest, 6)} units apart`);
   }
   return checkResult("position-continuity", failures, notes);
 }
@@ -422,7 +470,7 @@ function compareOutlines(
     return {
       distance: worst.distance,
       message:
-        `jumps away from the shape on screen — outlines ${formatNumber(worst.distance, 6)} units ` +
+        `jumps away from the shape on screen - outlines ${formatNumber(worst.distance, 6)} units ` +
         `apart at (${formatNumber(worst.point.x)}, ${formatNumber(worst.point.y)}); allowed ${options.maxDistance}`,
     };
   }
@@ -432,7 +480,10 @@ function compareOutlines(
   // Only an area change beyond what the allowed outline offset could explain counts.
   const allowedAreaChange =
     options.maxDistance *
-    [...outlinesBefore, ...outlinesAfter].reduce((sum, outline) => sum + perimeter(outline), 0);
+    [...outlinesBefore, ...outlinesAfter].reduce(
+      (sum, outline) => sum + perimeter(outline),
+      0,
+    );
   if (!(areaChange <= allowedAreaChange)) {
     return {
       distance: worst.distance,

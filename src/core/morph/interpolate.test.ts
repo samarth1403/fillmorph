@@ -10,7 +10,11 @@ import {
   FA_SOLID_HEART,
 } from "../parse/test-fixtures";
 import { centroidOf } from "./centroid";
-import { type ContourCorrespondence, correspondContours, interpolate } from "./interpolate";
+import {
+  type ContourCorrespondence,
+  correspondContours,
+  interpolate,
+} from "./interpolate";
 import { contour, FA_REGULAR_HEART, rectangle } from "./test-helpers";
 
 const ICONS = {
@@ -27,7 +31,12 @@ const ALL_PAIRS = Object.values(ICONS).flatMap((from) =>
 );
 
 const structureOf = (contours: readonly Contour[]) =>
-  contours.map(({ id, parentId, isHole, depth }) => ({ id, parentId, isHole, depth }));
+  contours.map(({ id, parentId, isHole, depth }) => ({
+    id,
+    parentId,
+    isHole,
+    depth,
+  }));
 
 /** Whether `a` is `b` started at some other index. */
 function isRotationOf(a: readonly Point[], b: readonly Point[]): boolean {
@@ -40,7 +49,7 @@ function isRotationOf(a: readonly Point[], b: readonly Point[]): boolean {
   );
 }
 
-describe("interpolate — lerp math (deliverable #5)", () => {
+describe("interpolate - lerp math (deliverable #5)", () => {
   const from = [contour("a", null, 0, rectangle(0, 0, 10, 10))];
   const to = [contour("b", null, 0, rectangle(20, 40, 30, 10))];
 
@@ -75,11 +84,13 @@ describe("interpolate — lerp math (deliverable #5)", () => {
 
   it("rejects a non-finite progress", () => {
     expect(() => interpolate(from, to, Number.NaN)).toThrow(RangeError);
-    expect(() => interpolate(from, to, Number.POSITIVE_INFINITY)).toThrow(RangeError);
+    expect(() => interpolate(from, to, Number.POSITIVE_INFINITY)).toThrow(
+      RangeError,
+    );
   });
 });
 
-describe("interpolate — endpoints on real icons", () => {
+describe("interpolate - endpoints on real icons", () => {
   it("reproduces every `to` outline at progress 1 and every `from` outline at progress 0", () => {
     for (const [from, to] of ALL_PAIRS) {
       const start = interpolate(from, to, 0);
@@ -107,10 +118,12 @@ describe("interpolate — endpoints on real icons", () => {
   });
 });
 
-describe("interpolate — output tree", () => {
+describe("interpolate - output tree", () => {
   it("is `to`'s tree plus the disappearing contours, the same at every progress", () => {
     for (const [from, to] of ALL_PAIRS) {
-      const trees = [0, 0.3, 1].map((p) => structureOf(interpolate(from, to, p)));
+      const trees = [0, 0.3, 1].map((p) =>
+        structureOf(interpolate(from, to, p)),
+      );
       expect(trees[1]).toEqual(trees[0]);
       expect(trees[2]).toEqual(trees[0]);
       expect(trees[0]?.slice(0, to.length)).toEqual(structureOf(to));
@@ -148,7 +161,9 @@ describe("interpolate — output tree", () => {
     const ring = interpolate(ICONS.twoHoles, ICONS.regularCircle, 0.5);
     const ids = ring.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ring.slice(2).map((c) => [c.isHole, c.parentId])).toEqual([[true, "c1"]]);
+    expect(ring.slice(2).map((c) => [c.isHole, c.parentId])).toEqual([
+      [true, "c1"],
+    ]);
 
     // "c1" disappears and collides with the ring outline's id, so it's suffixed.
     const suffixed = interpolate(
@@ -184,25 +199,40 @@ describe("interpolate — output tree", () => {
   });
 });
 
-describe("interpolate — graceful degradation (deliverable #2)", () => {
+describe("interpolate - graceful degradation (deliverable #2)", () => {
   const liveCentroid = (output: readonly Contour[], id: string): Point =>
     centroidOf((output.find((c) => c.id === id) as Contour).points);
   const pairOf = (from: Contour[], to: Contour[], id: string) =>
-    correspondContours(from, to).find((pair) => pair.id === id) as ContourCorrespondence;
+    correspondContours(from, to).find(
+      (pair) => pair.id === id,
+    ) as ContourCorrespondence;
 
   it("grows an appearing hole from its partnered parent's live centroid (0 holes → 1)", () => {
     const hole = ICONS.regularCircle.find((c) => c.isHole) as Contour;
     const outlineId = hole.parentId as string;
     const pair = pairOf(ICONS.solidCircle, ICONS.regularCircle, hole.id);
-    expect(pair.anchor).toEqual({ placeholderSide: "from", ancestorId: outlineId });
+    expect(pair.anchor).toEqual({
+      placeholderSide: "from",
+      ancestorId: outlineId,
+    });
     for (const progress of [0, 0.3, 0.6]) {
-      const output = interpolate(ICONS.solidCircle, ICONS.regularCircle, progress);
+      const output = interpolate(
+        ICONS.solidCircle,
+        ICONS.regularCircle,
+        progress,
+      );
       const center = liveCentroid(output, outlineId);
       const grown = output.find((c) => c.id === hole.id) as Contour;
       grown.points.forEach((point, index) => {
         const end = pair.toPoints[index] as Point;
-        expect(point.x).toBeCloseTo(center.x * (1 - progress) + end.x * progress, 12);
-        expect(point.y).toBeCloseTo(center.y * (1 - progress) + end.y * progress, 12);
+        expect(point.x).toBeCloseTo(
+          center.x * (1 - progress) + end.x * progress,
+          12,
+        );
+        expect(point.y).toBeCloseTo(
+          center.y * (1 - progress) + end.y * progress,
+          12,
+        );
       });
     }
   });
@@ -211,16 +241,29 @@ describe("interpolate — graceful degradation (deliverable #2)", () => {
     const hole = ICONS.regularHeart.find((c) => c.isHole) as Contour;
     const pair = pairOf(ICONS.regularHeart, ICONS.solidHeart, hole.id);
     const outlineId = ICONS.solidHeart[0]?.id as string;
-    expect(pair.anchor).toEqual({ placeholderSide: "to", ancestorId: outlineId });
+    expect(pair.anchor).toEqual({
+      placeholderSide: "to",
+      ancestorId: outlineId,
+    });
     for (const progress of [0.5, 1]) {
-      const output = interpolate(ICONS.regularHeart, ICONS.solidHeart, progress);
+      const output = interpolate(
+        ICONS.regularHeart,
+        ICONS.solidHeart,
+        progress,
+      );
       const center = liveCentroid(output, outlineId);
       const collapsing = output.find((c) => c.id === hole.id) as Contour;
       expect(collapsing.points).toHaveLength(pair.fromPoints.length);
       collapsing.points.forEach((point, index) => {
         const start = pair.fromPoints[index] as Point;
-        expect(point.x).toBeCloseTo(start.x * (1 - progress) + center.x * progress, 12);
-        expect(point.y).toBeCloseTo(start.y * (1 - progress) + center.y * progress, 12);
+        expect(point.x).toBeCloseTo(
+          start.x * (1 - progress) + center.x * progress,
+          12,
+        );
+        expect(point.y).toBeCloseTo(
+          start.y * (1 - progress) + center.y * progress,
+          12,
+        );
       });
     }
   });
@@ -236,7 +279,10 @@ describe("interpolate — graceful degradation (deliverable #2)", () => {
     ];
     const to = [contour("target", null, 0, rectangle(50, 55, 40, 30))];
     const dotPair = pairOf(from, to, "dot");
-    expect(dotPair.anchor).toEqual({ placeholderSide: "to", ancestorId: "target" });
+    expect(dotPair.anchor).toEqual({
+      placeholderSide: "to",
+      ancestorId: "target",
+    });
     expect(pairOf(from, to, "hole").anchor).toEqual({
       placeholderSide: "to",
       ancestorId: "target",
@@ -250,14 +296,24 @@ describe("interpolate — graceful degradation (deliverable #2)", () => {
       const dot = output.find((c) => c.id === "dot") as Contour;
       dot.points.forEach((point, index) => {
         const start = dotPair.fromPoints[index] as Point;
-        expect(point.x).toBeCloseTo(start.x * (1 - progress) + center.x * progress, 12);
-        expect(point.y).toBeCloseTo(start.y * (1 - progress) + center.y * progress, 12);
+        expect(point.x).toBeCloseTo(
+          start.x * (1 - progress) + center.x * progress,
+          12,
+        );
+        expect(point.y).toBeCloseTo(
+          start.y * (1 - progress) + center.y * progress,
+          12,
+        );
       });
     }
     // The target point really moves with the outline, from (20, 20) toward (70, 70); it isn't
     // one value computed once.
-    expect(centers.map((c) => c.x)).toEqual([32.5, 45, 57.5, 70].map((x) => expect.closeTo(x, 9)));
-    expect(centers.map((c) => c.y)).toEqual([32.5, 45, 57.5, 70].map((y) => expect.closeTo(y, 9)));
+    expect(centers.map((c) => c.x)).toEqual(
+      [32.5, 45, 57.5, 70].map((x) => expect.closeTo(x, 9)),
+    );
+    expect(centers.map((c) => c.y)).toEqual(
+      [32.5, 45, 57.5, 70].map((y) => expect.closeTo(y, 9)),
+    );
     // Hole and dot end on the same point, the outline's final centroid.
     const end = interpolate(from, to, 1);
     for (const id of ["hole", "dot"]) {
@@ -273,24 +329,40 @@ describe("interpolate — graceful degradation (deliverable #2)", () => {
     const from = [
       contour("left", null, 0, rectangle(0, 0, 30, 30)),
       contour("right", null, 0, rectangle(60, 0, 30, 30)),
-      contour("right-hole", "right", 1, [...rectangle(62, 2, 10, 10)].reverse()),
+      contour(
+        "right-hole",
+        "right",
+        1,
+        [...rectangle(62, 2, 10, 10)].reverse(),
+      ),
     ];
     const to = [contour("t", null, 0, rectangle(10, 60, 30, 30))];
     const holePair = pairOf(from, to, "right-hole");
     expect(holePair.anchor).toBeNull();
     expect(pairOf(from, to, "right").anchor).toBeNull();
     for (const progress of [0.5, 1]) {
-      const hole = interpolate(from, to, progress).find((c) => c.id === "right-hole") as Contour;
+      const hole = interpolate(from, to, progress).find(
+        (c) => c.id === "right-hole",
+      ) as Contour;
       hole.points.forEach((point, index) => {
         const start = holePair.fromPoints[index] as Point;
-        expect(point.x).toBeCloseTo(start.x * (1 - progress) + 67 * progress, 12);
-        expect(point.y).toBeCloseTo(start.y * (1 - progress) + 7 * progress, 12);
+        expect(point.x).toBeCloseTo(
+          start.x * (1 - progress) + 67 * progress,
+          12,
+        );
+        expect(point.y).toBeCloseTo(
+          start.y * (1 - progress) + 7 * progress,
+          12,
+        );
       });
     }
   });
 
   it("leaves matched contours without an anchor", () => {
-    for (const pair of correspondContours(ICONS.regularHeart, ICONS.solidHeart)) {
+    for (const pair of correspondContours(
+      ICONS.regularHeart,
+      ICONS.solidHeart,
+    )) {
       if (pair.id === ICONS.solidHeart[0]?.id) expect(pair.anchor).toBeNull();
     }
   });
@@ -302,7 +374,8 @@ describe("interpolate — graceful degradation (deliverable #2)", () => {
         expect(pair.toPoints).toHaveLength(pair.fromPoints.length);
       }
       for (const c of interpolate(from, to, 0.37)) {
-        for (const p of c.points) expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true);
+        for (const p of c.points)
+          expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true);
       }
     }
   });

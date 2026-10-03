@@ -8,7 +8,7 @@ export type SpringConfig = { stiffness: number; damping: number; mass: number };
 
 /**
  * A spring's state in the current leg's progress space: `position` 0 is the leg's `from`, 1 its
- * `to`; `velocity` is in progress units per second. Plain data owned by the caller — core only
+ * `to`; `velocity` is in progress units per second. Plain data owned by the caller - core only
  * computes new states, it never holds one.
  */
 export type SpringState = { position: number; velocity: number };
@@ -72,7 +72,10 @@ function decayedBasis(
   if (discriminant < 0) {
     const omegaDamped = Math.sqrt(-discriminant);
     const angle = omegaDamped * t;
-    return { decayedC: decay * Math.cos(angle), decayedS: (decay * Math.sin(angle)) / omegaDamped };
+    return {
+      decayedC: decay * Math.cos(angle),
+      decayedS: (decay * Math.sin(angle)) / omegaDamped,
+    };
   }
   if (discriminant === 0) return { decayedC: decay, decayedS: decay * t };
 
@@ -89,12 +92,20 @@ function decayedBasis(
   return { decayedC: (slow + fast) / 2, decayedS: (slow - fast) / (2 * gamma) };
 }
 
-function validate(state: SpringState, config: SpringConfig, target: number, dt: number): void {
+function validate(
+  state: SpringState,
+  config: SpringConfig,
+  target: number,
+  dt: number,
+): void {
   const problems: string[] = [];
-  if (!Number.isFinite(state.position)) problems.push(`state.position is ${state.position}`);
-  if (!Number.isFinite(state.velocity)) problems.push(`state.velocity is ${state.velocity}`);
+  if (!Number.isFinite(state.position))
+    problems.push(`state.position is ${state.position}`);
+  if (!Number.isFinite(state.velocity))
+    problems.push(`state.velocity is ${state.velocity}`);
   if (!Number.isFinite(target)) problems.push(`target is ${target}`);
-  if (!(Number.isFinite(dt) && dt >= 0)) problems.push(`dt is ${dt} (seconds, must be ≥ 0)`);
+  if (!(Number.isFinite(dt) && dt >= 0))
+    problems.push(`dt is ${dt} (seconds, must be ≥ 0)`);
   if (!(Number.isFinite(config.stiffness) && config.stiffness > 0)) {
     problems.push(`config.stiffness is ${config.stiffness} (must be > 0)`);
   }
@@ -105,6 +116,8 @@ function validate(state: SpringState, config: SpringConfig, target: number, dt: 
     problems.push(`config.damping is ${config.damping} (must be ≥ 0)`);
   }
   if (problems.length > 0) {
-    throw new RangeError(`stepSpring: ${problems.join("; ")}. All values must be finite numbers.`);
+    throw new RangeError(
+      `stepSpring: ${problems.join("; ")}. All values must be finite numbers.`,
+    );
   }
 }

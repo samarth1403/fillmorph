@@ -16,14 +16,20 @@ export const FLATTEN_TOLERANCE_RATIO = 0.001;
  *
  * Why not one tolerance for the whole icon: an absolute error bound lets a small circle meet it
  * with far fewer points than a large one (the count grows only with the square root of the
- * radius), so a small inner contour came out visibly faceted — on FA's bullseye, the innermost
+ * radius), so a small inner contour came out visibly faceted - on FA's bullseye, the innermost
  * disc was a 16-gon with 23° turns while the outer ring had 64 points. Relative to its own size,
  * every contour gets the same angular smoothness, however small or deeply nested. The cap only
  * ever tightens the tolerance, so a contour as large as the icon keeps exactly the icon-wide value
  * and no contour gets fewer points than a single icon-wide tolerance would give it.
  */
-export function contourTolerance(subpath: Subpath, iconTolerance: number): number {
-  return Math.min(iconTolerance, measureExtent([subpath]) * FLATTEN_TOLERANCE_RATIO);
+export function contourTolerance(
+  subpath: Subpath,
+  iconTolerance: number,
+): number {
+  return Math.min(
+    iconTolerance,
+    measureExtent([subpath]) * FLATTEN_TOLERANCE_RATIO,
+  );
 }
 
 /** Hard stop for recursive subdivision; only reachable with pathological input. */
@@ -31,7 +37,7 @@ const MAX_SUBDIVISION_DEPTH = 16;
 
 /**
  * Flattens one subpath into a polyline: lines stay as their end points, while Béziers and arcs
- * are adaptively subdivided until every piece is within `tolerance` of the true curve — tight
+ * are adaptively subdivided until every piece is within `tolerance` of the true curve - tight
  * curves get more points, gentle ones fewer. The result starts with `subpath.start` and still
  * contains any exact duplicate points; cleanup is the caller's job.
  */
@@ -88,13 +94,26 @@ export function measureExtent(subpaths: readonly Subpath[]): number {
   return Number.isFinite(extent) && extent > 0 ? extent : 1;
 }
 
-function flattenSegment(from: Point, segment: Segment, tolerance: number, out: Point[]): void {
+function flattenSegment(
+  from: Point,
+  segment: Segment,
+  tolerance: number,
+  out: Point[],
+): void {
   switch (segment.kind) {
     case "line":
       out.push(segment.to);
       return;
     case "cubic":
-      flattenCubic(from, segment.ctrl1, segment.ctrl2, segment.to, tolerance, 0, out);
+      flattenCubic(
+        from,
+        segment.ctrl1,
+        segment.ctrl2,
+        segment.to,
+        tolerance,
+        0,
+        out,
+      );
       return;
     case "quadratic": {
       // Degree elevation: the exact cubic equivalent of a quadratic Bézier.
@@ -122,7 +141,10 @@ function flattenCubic(
 ): void {
   // The curve lies inside its control hull, so if both inner control points are within
   // tolerance of the chord, the whole curve is.
-  const flatness = Math.max(distanceToSegment(p1, p0, p3), distanceToSegment(p2, p0, p3));
+  const flatness = Math.max(
+    distanceToSegment(p1, p0, p3),
+    distanceToSegment(p2, p0, p3),
+  );
   if (flatness <= tolerance || depth >= MAX_SUBDIVISION_DEPTH) {
     out.push(p3);
     return;
@@ -144,7 +166,10 @@ type CubicControls = [Point, Point, Point, Point];
  * endpoint-to-center conversion from the SVG 1.1 implementation notes (F.6.5, including the
  * out-of-range radii correction in F.6.6).
  */
-function arcToCubics(from: Point, arc: Extract<Segment, { kind: "arc" }>): CubicControls[] {
+function arcToCubics(
+  from: Point,
+  arc: Extract<Segment, { kind: "arc" }>,
+): CubicControls[] {
   const to = arc.to;
   if (from.x === to.x && from.y === to.y) return [];
   let { rx, ry } = arc;
@@ -165,7 +190,8 @@ function arcToCubics(from: Point, arc: Extract<Segment, { kind: "arc" }>): Cubic
     ry *= scale;
   }
 
-  const numerator = rx * rx * ry * ry - rx * rx * y1p * y1p - ry * ry * x1p * x1p;
+  const numerator =
+    rx * rx * ry * ry - rx * rx * y1p * y1p - ry * ry * x1p * x1p;
   const denominator = rx * rx * y1p * y1p + ry * ry * x1p * x1p;
   const sign = arc.isLargeArc !== arc.isSweep ? 1 : -1;
   const coefficient = sign * Math.sqrt(Math.max(0, numerator / denominator));
@@ -189,7 +215,10 @@ function arcToCubics(from: Point, arc: Extract<Segment, { kind: "arc" }>): Cubic
     y: cy + sinPhi * rx * ux + cosPhi * ry * uy,
   });
 
-  const pieces = Math.max(1, Math.ceil(Math.abs(sweepAngle) / (Math.PI / 2) - 1e-9));
+  const pieces = Math.max(
+    1,
+    Math.ceil(Math.abs(sweepAngle) / (Math.PI / 2) - 1e-9),
+  );
   const step = sweepAngle / pieces;
   const handle = (4 / 3) * Math.tan(step / 4);
   const cubics: CubicControls[] = [];

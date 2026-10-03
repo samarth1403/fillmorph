@@ -13,7 +13,11 @@ import {
  * morph from rest reaches its target without visibly overshooting and settles in about 0.8 s. A
  * tunable starting point, not a fixed part of the API (spec 05 deliverable #1).
  */
-const DEFAULT_SPRING_CONFIG: SpringConfig = { stiffness: 170, damping: 26, mass: 1 };
+const DEFAULT_SPRING_CONFIG: SpringConfig = {
+  stiffness: 170,
+  damping: 26,
+  mass: 1,
+};
 
 /** Receives the morph's current canonical-frame contours. */
 export type MorphListener = (contours: Contour[]) => void;
@@ -45,8 +49,8 @@ export type MorphDriver = {
  * Spec 05's animation driver: animates `from` → `to` with a spring, producing the morph's
  * contours every `requestAnimationFrame` until it settles.
  *
- * All of the morph's rules — stepping the spring, interpolating, settling on the exact target,
- * and the retarget ("leg") rule — are core's `startMorph` / `advanceMorph` / `retargetMorph`, the
+ * All of the morph's rules - stepping the spring, interpolating, settling on the exact target,
+ * and the retarget ("leg") rule - are core's `startMorph` / `advanceMorph` / `retargetMorph`, the
  * same functions spec 03's playback harness runs. This driver adds only what a page needs around
  * them: it holds the one mutable `MorphState`, schedules frames, turns frame timestamps into
  * `dt`, and hands each new shape to its subscribers.
@@ -79,7 +83,10 @@ export function createMorphDriver(
 
   const frame = (timestamp: number): void => {
     frameId = null;
-    const dt = lastTimestamp === null ? 0 : Math.max(0, (timestamp - lastTimestamp) / 1000);
+    const dt =
+      lastTimestamp === null
+        ? 0
+        : Math.max(0, (timestamp - lastTimestamp) / 1000);
     lastTimestamp = timestamp;
     state = advanceMorph(state, config, dt);
     if (state.isSettled) lastTimestamp = null;
@@ -105,7 +112,10 @@ export function createMorphDriver(
       if (frameId !== null) cancelAnimationFrame(frameId);
       frameId = null;
       lastTimestamp = null;
-      state = { ...state, spring: { position: state.spring.position, velocity: 0 } };
+      state = {
+        ...state,
+        spring: { position: state.spring.position, velocity: 0 },
+      };
     },
   };
 }

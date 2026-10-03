@@ -39,15 +39,15 @@ const DEGENERATE_AREA_RATIO = 1e-9;
  * author sees in their `d` data.
  *
  * Runs in two separate stages:
- * 1. Markup parsing — generic, well-formedness only (`FillmorphMarkupError`).
- * 2. Contract validation — first whether this is a morphable kind of icon
+ * 1. Markup parsing - generic, well-formedness only (`FillmorphMarkupError`).
+ * 2. Contract validation - first whether this is a morphable kind of icon
  *    (`FillmorphIncompatibleIconError`), then whether each path's geometry is sound
  *    (`FillmorphParseError`). The icon-type check runs first because stroke icons routinely
  *    contain open subpaths, and "this is a stroke icon" is the accurate diagnosis for them.
  *
  * Every closed subpath of every rendered `<path>` becomes one `Contour`, flattened adaptively
  * (content-aware point density, with a tolerance relative to that contour's own size, capped at
- * the icon-wide one — see `contourTolerance`; no cross-icon point-count reconciliation),
+ * the icon-wide one - see `contourTolerance`; no cross-icon point-count reconciliation),
  * classified as outer/hole by containment, mapped into the canonical frame, and normalized in
  * winding and start point (see `Contour`). Contours are returned in document order, with ids `"c0"`, `"c1"`, … in that order
  * and each non-outer contour's `parentId` pointing at its innermost container.
@@ -60,7 +60,10 @@ export function parseIcon(svg: string): ParsedIcon {
   const markup = parseSvgMarkup(svg);
   const { paths: renderedPaths, viewBox } = validateIconContract(markup);
 
-  const parsedPaths = renderedPaths.map((path) => ({ path, subpaths: readSubpaths(path) }));
+  const parsedPaths = renderedPaths.map((path) => ({
+    path,
+    subpaths: readSubpaths(path),
+  }));
   const extent = measureExtent(parsedPaths.flatMap(({ subpaths }) => subpaths));
   const tolerance = extent * FLATTEN_TOLERANCE_RATIO;
   const samePointTolerance = extent * SAME_POINT_RATIO;
@@ -84,7 +87,11 @@ export function parseIcon(svg: string): ParsedIcon {
     return {
       id: contourId(index),
       parentId: parentIndex === null ? null : contourId(parentIndex),
-      points: normalizeContour(points.map(toCanonical), isHole, samePointTolerance * scale),
+      points: normalizeContour(
+        points.map(toCanonical),
+        isHole,
+        samePointTolerance * scale,
+      ),
       isHole,
       depth,
     };
@@ -122,25 +129,30 @@ function buildPolygon(
   // Flattening uses the contour's own (capped) tolerance so small contours stay as smooth as
   // large ones; the closing and classification checks keep the icon-wide one, since they absorb
   // exporter rounding in absolute units rather than judging smoothness.
-  const flattened = flattenSubpath(subpath, contourTolerance(subpath, tolerance));
+  const flattened = flattenSubpath(
+    subpath,
+    contourTolerance(subpath, tolerance),
+  );
   const end = flattened[flattened.length - 1] as Point;
   if (!subpath.hasClosePath && distance(end, subpath.start) > tolerance) {
     throw new FillmorphParseError(
       `${describe()} is open: it doesn't end with "Z" and its end point ${formatPoint(end)} ` +
         `doesn't return to its start ${formatPoint(subpath.start)}. fillmorph only morphs closed ` +
-        'filled shapes — close the subpath with "Z".',
+        'filled shapes - close the subpath with "Z".',
     );
   }
 
   const points: Point[] = [];
   for (const point of flattened) {
     const previous = points[points.length - 1];
-    if (!previous || distance(previous, point) > samePointTolerance) points.push(point);
+    if (!previous || distance(previous, point) > samePointTolerance)
+      points.push(point);
   }
   // Closing (explicit `Z` or implicit) is represented by the implicit last-to-first edge.
   while (
     points.length > 1 &&
-    distance(points[points.length - 1] as Point, points[0] as Point) <= tolerance
+    distance(points[points.length - 1] as Point, points[0] as Point) <=
+      tolerance
   ) {
     points.pop();
   }

@@ -1,5 +1,5 @@
 /**
- * `fillmorph` — the zero-dependency core: pure geometry and animation math.
+ * `fillmorph` - the zero-dependency core: pure geometry and animation math.
  *
  * `parseIcon` (spec 02) turns markup into canonical-frame contours, `interpolate` (spec 04) gives
  * the morph's geometry at any progress, and `renderContours` (spec 03) is the one contour-to-`d`

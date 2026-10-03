@@ -35,12 +35,19 @@ function renderSection(section: PlaybackSection, index: number): string {
     leg: entry.leg,
     d: renderContours(entry.contours),
   }));
-  const interruptions = section.trace.interruptions.map((interruption) => interruption.time);
+  const interruptions = section.trace.interruptions.map(
+    (interruption) => interruption.time,
+  );
   // "<" is escaped so no frame data can close the <script> element early.
-  const data = JSON.stringify({ frames, interruptions }).replaceAll("<", "\\u003c");
+  const data = JSON.stringify({ frames, interruptions }).replaceAll(
+    "<",
+    "\\u003c",
+  );
   const first = frames[0]?.d ?? "";
   const passed = section.checks.every((check) => check.passed);
-  const status = passed ? `<span class="pass">PASS</span>` : `<span class="fail">FAIL</span>`;
+  const status = passed
+    ? `<span class="pass">PASS</span>`
+    : `<span class="fail">FAIL</span>`;
   return `<section>
 <h2>${status} ${escapeHtml(section.title)}</h2>
 <p class="meta">${escapeHtml(section.subtitle)}<br>${escapeHtml(describeTuning(section))}</p>
@@ -106,8 +113,11 @@ for (const player of document.querySelectorAll("[data-player]")) {
  * recorded trace (every frame's path data and timestamp) and replays it in real time with plain
  * inline JavaScript, plus a scrubber for stepping frame by frame.
  */
-export function renderPlaybackPage(sections: readonly PlaybackSection[], lede: string): string {
-  const body = `<h1>fillmorph harness — real-time playback</h1>
+export function renderPlaybackPage(
+  sections: readonly PlaybackSection[],
+  lede: string,
+): string {
+  const body = `<h1>fillmorph harness - real-time playback</h1>
 <p class="lede">${escapeHtml(lede)}</p>
 ${sections.map(renderSection).join("\n")}`;
   return renderPage("Harness playback", body, PLAYER_SCRIPT);

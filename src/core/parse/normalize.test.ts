@@ -18,12 +18,18 @@ function createRandom(seed: number): () => number {
 /** A random simple (star-shaped) polygon: sorted angles, random radii around a random centre. */
 function randomPolygon(random: () => number): Point[] {
   const count = 3 + Math.floor(random() * 30);
-  const angles = Array.from({ length: count }, () => random() * 2 * Math.PI).sort((a, b) => a - b);
+  const angles = Array.from(
+    { length: count },
+    () => random() * 2 * Math.PI,
+  ).sort((a, b) => a - b);
   const cx = random() * 200 - 100;
   const cy = random() * 200 - 100;
   return angles.map((angle) => {
     const radius = 5 + random() * 50;
-    return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
+    return {
+      x: cx + radius * Math.cos(angle),
+      y: cy + radius * Math.sin(angle),
+    };
   });
 }
 
@@ -39,19 +45,31 @@ const SQUARE_CLOCKWISE_ON_SCREEN: Point[] = [
   { x: 0, y: 0 },
 ];
 
-describe("normalizeContour — examples", () => {
+describe("normalizeContour - examples", () => {
   it("runs outer contours counter-clockwise on screen (negative shoelace area)", () => {
-    const normalized = normalizeContour(SQUARE_CLOCKWISE_ON_SCREEN, false, 1e-9);
+    const normalized = normalizeContour(
+      SQUARE_CLOCKWISE_ON_SCREEN,
+      false,
+      1e-9,
+    );
     expect(signedArea(normalized)).toBeLessThan(0);
   });
 
   it("runs holes clockwise on screen (positive shoelace area)", () => {
-    const normalized = normalizeContour([...SQUARE_CLOCKWISE_ON_SCREEN].reverse(), true, 1e-9);
+    const normalized = normalizeContour(
+      [...SQUARE_CLOCKWISE_ON_SCREEN].reverse(),
+      true,
+      1e-9,
+    );
     expect(signedArea(normalized)).toBeGreaterThan(0);
   });
 
   it("starts at the topmost point, breaking a tie on a flat top edge by leftmost", () => {
-    const normalized = normalizeContour(SQUARE_CLOCKWISE_ON_SCREEN, false, 1e-9);
+    const normalized = normalizeContour(
+      SQUARE_CLOCKWISE_ON_SCREEN,
+      false,
+      1e-9,
+    );
     expect(normalized[0]).toEqual({ x: 0, y: 0 });
     expect(normalized).toEqual([
       { x: 0, y: 0 },
@@ -68,8 +86,14 @@ describe("normalizeContour — examples", () => {
       { x: 0, y: 10 },
       { x: 10, y: 10 },
     ];
-    expect(normalizeContour(noisyTop, false, 1e-9)[0]).toEqual({ x: 0, y: 2e-12 });
-    expect(normalizeContour(noisyTop, false, 0)[0]).toEqual({ x: 10, y: 1e-12 });
+    expect(normalizeContour(noisyTop, false, 1e-9)[0]).toEqual({
+      x: 0,
+      y: 2e-12,
+    });
+    expect(normalizeContour(noisyTop, false, 0)[0]).toEqual({
+      x: 10,
+      y: 1e-12,
+    });
   });
 
   it("does not modify its input", () => {
@@ -79,7 +103,7 @@ describe("normalizeContour — examples", () => {
   });
 });
 
-describe("normalizeContour — properties over random polygons", () => {
+describe("normalizeContour - properties over random polygons", () => {
   const random = createRandom(0x5eed02);
   const cases = Array.from({ length: 200 }, (_, index) => ({
     index,
@@ -93,7 +117,9 @@ describe("normalizeContour — properties over random polygons", () => {
       const expected = normalizeContour(polygon, isHole, 1e-9);
       const rotated = rotate(polygon, rotation % polygon.length);
       expect(normalizeContour(rotated, isHole, 1e-9)).toEqual(expected);
-      expect(normalizeContour([...rotated].reverse(), isHole, 1e-9)).toEqual(expected);
+      expect(normalizeContour([...rotated].reverse(), isHole, 1e-9)).toEqual(
+        expected,
+      );
     }
   });
 
@@ -110,7 +136,9 @@ describe("normalizeContour — properties over random polygons", () => {
       expect(Math.sign(signedArea(normalized))).toBe(isHole ? 1 : -1);
       const first = normalized[0] as Point;
       for (const point of normalized) {
-        expect(point.y > first.y || (point.y === first.y && point.x >= first.x)).toBe(true);
+        expect(
+          point.y > first.y || (point.y === first.y && point.x >= first.x),
+        ).toBe(true);
       }
     }
   });
@@ -118,9 +146,9 @@ describe("normalizeContour — properties over random polygons", () => {
   it("keeps exactly the same set of points", () => {
     for (const { polygon, isHole } of cases) {
       const byPosition = (a: Point, b: Point) => a.x - b.x || a.y - b.y;
-      expect([...normalizeContour(polygon, isHole, 1e-9)].sort(byPosition)).toEqual(
-        [...polygon].sort(byPosition),
-      );
+      expect(
+        [...normalizeContour(polygon, isHole, 1e-9)].sort(byPosition),
+      ).toEqual([...polygon].sort(byPosition));
     }
   });
 });

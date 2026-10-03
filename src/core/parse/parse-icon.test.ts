@@ -28,11 +28,19 @@ import {
 const svg = (body: string, rootAttributes = ' viewBox="0 0 24 24"'): string =>
   `<svg xmlns="http://www.w3.org/2000/svg"${rootAttributes}>${body}</svg>`;
 const contoursOf = (markup: string): Contour[] => parseIcon(markup).contours;
-const area = (contour: Contour | undefined): number => Math.abs(signedArea(contour?.points ?? []));
-const outers = (contours: Contour[]) => contours.filter((contour) => !contour.isHole);
-const holes = (contours: Contour[]) => contours.filter((contour) => contour.isHole);
+const area = (contour: Contour | undefined): number =>
+  Math.abs(signedArea(contour?.points ?? []));
+const outers = (contours: Contour[]) =>
+  contours.filter((contour) => !contour.isHole);
+const holes = (contours: Contour[]) =>
+  contours.filter((contour) => contour.isHole);
 const tree = (contours: Contour[]) =>
-  contours.map(({ id, parentId, isHole, depth }) => ({ id, parentId, isHole, depth }));
+  contours.map(({ id, parentId, isHole, depth }) => ({
+    id,
+    parentId,
+    isHole,
+    depth,
+  }));
 
 const ALL_FILLED_FIXTURES = [
   FA_SOLID_HEART,
@@ -44,10 +52,12 @@ const ALL_FILLED_FIXTURES = [
   CUSTOM_TWO_HOLES,
 ];
 
-describe("parseIcon — accepts filled icons from different sources", () => {
+describe("parseIcon - accepts filled icons from different sources", () => {
   it("parses a real Font Awesome Solid icon into one outer contour and its viewBox", () => {
     const { contours, viewBox } = parseIcon(FA_SOLID_HEART);
-    expect(tree(contours)).toEqual([{ id: "c0", parentId: null, isHole: false, depth: 0 }]);
+    expect(tree(contours)).toEqual([
+      { id: "c0", parentId: null, isHole: false, depth: 0 },
+    ]);
     expect(viewBox).toEqual({ x: 0, y: 0, width: 512, height: 512 });
   });
 
@@ -61,10 +71,14 @@ describe("parseIcon — accepts filled icons from different sources", () => {
   });
 });
 
-describe("parseIcon — stage 2 enforces the fill/stroke distinction", () => {
+describe("parseIcon - stage 2 enforces the fill/stroke distinction", () => {
   it("rejects a real Lucide stroke icon with FillmorphIncompatibleIconError", () => {
-    expect(() => parseIcon(LUCIDE_HEART)).toThrow(FillmorphIncompatibleIconError);
-    expect(() => parseIcon(LUCIDE_HEART)).toThrow(/fill: none, stroke: currentColor/);
+    expect(() => parseIcon(LUCIDE_HEART)).toThrow(
+      FillmorphIncompatibleIconError,
+    );
+    expect(() => parseIcon(LUCIDE_HEART)).toThrow(
+      /fill: none, stroke: currentColor/,
+    );
   });
 
   it("accepts the Font Awesome Solid icon of the same subject (a heart)", () => {
@@ -72,22 +86,29 @@ describe("parseIcon — stage 2 enforces the fill/stroke distinction", () => {
   });
 
   it("rejects stroke icons whose fill: none lives in a stylesheet inside <defs> (Illustrator)", () => {
-    for (const markup of [STYLESHEET_STROKE_IN_DEFS, ILLUSTRATOR_STYLESHEET_STROKE]) {
+    for (const markup of [
+      STYLESHEET_STROKE_IN_DEFS,
+      ILLUSTRATOR_STYLESHEET_STROKE,
+    ]) {
       expect(() => parseIcon(markup)).toThrow(FillmorphIncompatibleIconError);
       expect(() => parseIcon(markup)).toThrow(/contains a <style> element/);
     }
   });
 
   it("reports a stroke icon as incompatible, not as broken geometry, despite its open subpaths", () => {
-    expect(() => parseIcon(LUCIDE_CIRCLE_CHECK)).toThrow(FillmorphIncompatibleIconError);
+    expect(() => parseIcon(LUCIDE_CIRCLE_CHECK)).toThrow(
+      FillmorphIncompatibleIconError,
+    );
     expect(() => parseIcon(LUCIDE_CIRCLE_CHECK)).toThrow(/fill: none/);
   });
 });
 
-describe("parseIcon — each failure mode has its own error type", () => {
+describe("parseIcon - each failure mode has its own error type", () => {
   it("throws FillmorphMarkupError (only) for malformed XML", () => {
     expect(() => parseIcon(BROKEN_MALFORMED_XML)).toThrow(FillmorphMarkupError);
-    expect(() => parseIcon(BROKEN_MALFORMED_XML)).toThrow(/<path> is closed by <\/svg>/);
+    expect(() => parseIcon(BROKEN_MALFORMED_XML)).toThrow(
+      /<path> is closed by <\/svg>/,
+    );
   });
 
   it("throws FillmorphParseError for an open subpath, locating it and saying how to fix it", () => {
@@ -99,7 +120,9 @@ describe("parseIcon — each failure mode has its own error type", () => {
   });
 
   it("throws FillmorphParseError for a degenerate zero-area subpath", () => {
-    expect(() => parseIcon(BROKEN_DEGENERATE_SUBPATH)).toThrow(FillmorphParseError);
+    expect(() => parseIcon(BROKEN_DEGENERATE_SUBPATH)).toThrow(
+      FillmorphParseError,
+    );
     expect(() => parseIcon(BROKEN_DEGENERATE_SUBPATH)).toThrow(
       /Subpath 2 of <path> #1 is degenerate/,
     );
@@ -108,7 +131,9 @@ describe("parseIcon — each failure mode has its own error type", () => {
   it("throws FillmorphParseError for a zero-length 'M x y Z' subpath", () => {
     const markup = svg('<path d="M0 0H10V10Z M5 5Z"/>');
     expect(() => parseIcon(markup)).toThrow(FillmorphParseError);
-    expect(() => parseIcon(markup)).toThrow(/Subpath 2 of <path> #1 is degenerate/);
+    expect(() => parseIcon(markup)).toThrow(
+      /Subpath 2 of <path> #1 is degenerate/,
+    );
   });
 
   it("throws FillmorphParseError for malformed d syntax, with the path and character offset", () => {
@@ -121,11 +146,17 @@ describe("parseIcon — each failure mode has its own error type", () => {
 
   it("throws FillmorphParseError for a path with no d attribute", () => {
     expect(() => parseIcon(svg("<path/>"))).toThrow(FillmorphParseError);
-    expect(() => parseIcon(svg("<path/>"))).toThrow(/<path> #1 has no "d" attribute/);
+    expect(() => parseIcon(svg("<path/>"))).toThrow(
+      /<path> #1 has no "d" attribute/,
+    );
   });
 
   it("uses three distinct error classes", () => {
-    const errors = [BROKEN_MALFORMED_XML, BROKEN_OPEN_SUBPATH, LUCIDE_HEART].map((markup) => {
+    const errors = [
+      BROKEN_MALFORMED_XML,
+      BROKEN_OPEN_SUBPATH,
+      LUCIDE_HEART,
+    ].map((markup) => {
       try {
         parseIcon(markup);
       } catch (error) {
@@ -147,11 +178,13 @@ describe("parseIcon — each failure mode has its own error type", () => {
   });
 
   it("accepts a subpath without Z whose end point returns to its start (implicit close)", () => {
-    expect(contoursOf(svg('<path d="M0 0 L10 0 L10 10 L0 0"/>'))).toHaveLength(1);
+    expect(contoursOf(svg('<path d="M0 0 L10 0 L10 10 L0 0"/>'))).toHaveLength(
+      1,
+    );
   });
 });
 
-describe("parseIcon — hole classification and the containment tree", () => {
+describe("parseIcon - hole classification and the containment tree", () => {
   it("flags a ring's inner contour as a hole of its outer contour (Font Awesome)", () => {
     const contours = contoursOf(FA_REGULAR_CIRCLE);
     expect(tree(contours)).toEqual([
@@ -160,7 +193,10 @@ describe("parseIcon — hole classification and the containment tree", () => {
     ]);
     // Canonical frame: the 512-unit viewBox scales by 100/512, so r=256 → 50 and r=208 → 40.625.
     expect(area(outers(contours)[0]) / (Math.PI * 50 ** 2)).toBeCloseTo(1, 2);
-    expect(area(holes(contours)[0]) / (Math.PI * 40.625 ** 2)).toBeCloseTo(1, 2);
+    expect(area(holes(contours)[0]) / (Math.PI * 40.625 ** 2)).toBeCloseTo(
+      1,
+      2,
+    );
   });
 
   it("links a bullseye's dot to the hole it sits in, not to the outermost shape", () => {
@@ -196,7 +232,9 @@ describe("parseIcon — hole classification and the containment tree", () => {
     const byDepth = [...contours].sort((a, b) => a.depth - b.depth);
     expect(byDepth.map((contour) => contour.depth)).toEqual([0, 1, 2, 3, 4]);
     byDepth.forEach((contour, depth) => {
-      expect(contour.parentId).toBe(depth === 0 ? null : byDepth[depth - 1]?.id);
+      expect(contour.parentId).toBe(
+        depth === 0 ? null : byDepth[depth - 1]?.id,
+      );
     });
   });
 
@@ -215,7 +253,9 @@ describe("parseIcon — hole classification and the containment tree", () => {
   it("classifies a same-winding nested contour under nonzero as a hole (known limitation)", () => {
     // Browsers draw this inner square filled (nonzero, same direction), but spec 02 locks
     // containment-only classification, so it is still a hole here.
-    const contours = contoursOf(svg('<path fill-rule="nonzero" d="M0 0H10V10H0Z M2 2H8V8H2Z"/>'));
+    const contours = contoursOf(
+      svg('<path fill-rule="nonzero" d="M0 0H10V10H0Z M2 2H8V8H2Z"/>'),
+    );
     expect(tree(contours)).toEqual([
       { id: "c0", parentId: null, isHole: false, depth: 0 },
       { id: "c1", parentId: "c0", isHole: true, depth: 1 },
@@ -244,33 +284,52 @@ describe("parseIcon — hole classification and the containment tree", () => {
   });
 });
 
-describe("parseIcon — viewBox", () => {
+describe("parseIcon - viewBox", () => {
   it("returns the root's viewBox, including a non-zero origin and comma separators", () => {
     const markup = svg('<path d="M0 0H10V10Z"/>', ' viewBox="-2,-2.5 28 29"');
-    expect(parseIcon(markup).viewBox).toEqual({ x: -2, y: -2.5, width: 28, height: 29 });
+    expect(parseIcon(markup).viewBox).toEqual({
+      x: -2,
+      y: -2.5,
+      width: 28,
+      height: 29,
+    });
   });
 
   it("prefers viewBox over width and height when both are present", () => {
-    const markup = svg('<path d="M0 0H10V10Z"/>', ' width="48" height="48" viewBox="0 0 24 24"');
-    expect(parseIcon(markup).viewBox).toEqual({ x: 0, y: 0, width: 24, height: 24 });
+    const markup = svg(
+      '<path d="M0 0H10V10Z"/>',
+      ' width="48" height="48" viewBox="0 0 24 24"',
+    );
+    expect(parseIcon(markup).viewBox).toEqual({
+      x: 0,
+      y: 0,
+      width: 24,
+      height: 24,
+    });
   });
 
   it("falls back to 0 0 width height from numeric or px width/height when there's no viewBox", () => {
-    expect(parseIcon(svg('<path d="M0 0H10V10Z"/>', ' width="32" height="16"')).viewBox).toEqual({
+    expect(
+      parseIcon(svg('<path d="M0 0H10V10Z"/>', ' width="32" height="16"'))
+        .viewBox,
+    ).toEqual({
       x: 0,
       y: 0,
       width: 32,
       height: 16,
     });
     expect(
-      parseIcon(svg('<path d="M0 0H10V10Z"/>', ' width="24px" height="24.5px"')).viewBox,
+      parseIcon(svg('<path d="M0 0H10V10Z"/>', ' width="24px" height="24.5px"'))
+        .viewBox,
     ).toEqual({ x: 0, y: 0, width: 24, height: 24.5 });
   });
 
   it("rejects an icon with no viewBox and no width/height as incompatible", () => {
     const markup = svg('<path d="M0 0H10V10Z"/>', "");
     expect(() => parseIcon(markup)).toThrow(FillmorphIncompatibleIconError);
-    expect(() => parseIcon(markup)).toThrow(/no viewBox and no width or height either/);
+    expect(() => parseIcon(markup)).toThrow(
+      /no viewBox and no width or height either/,
+    );
   });
 
   it("rejects an icon with no viewBox and relative width/height as incompatible", () => {
@@ -286,7 +345,13 @@ describe("parseIcon — viewBox", () => {
   });
 
   it("rejects a malformed or negative-size viewBox as malformed markup", () => {
-    for (const viewBox of ["0 0 24", "0 0 24 24 24", "0 0 a 24", "", "0 0 -24 24"]) {
+    for (const viewBox of [
+      "0 0 24",
+      "0 0 24 24 24",
+      "0 0 a 24",
+      "",
+      "0 0 -24 24",
+    ]) {
       const markup = svg('<path d="M0 0H10V10Z"/>', ` viewBox="${viewBox}"`);
       expect(() => parseIcon(markup), viewBox).toThrow(FillmorphMarkupError);
       expect(() => parseIcon(markup), viewBox).toThrow(/viewBox/);
@@ -294,12 +359,15 @@ describe("parseIcon — viewBox", () => {
   });
 
   it("still reports a stroke icon as a stroke icon even if its frame is also unusable", () => {
-    const markup = svg('<path fill="none" stroke="black" d="M0 0H10V10Z"/>', "");
+    const markup = svg(
+      '<path fill="none" stroke="black" d="M0 0H10V10Z"/>',
+      "",
+    );
     expect(() => parseIcon(markup)).toThrow(/fill: none/);
   });
 });
 
-describe("parseIcon — canonical frame", () => {
+describe("parseIcon - canonical frame", () => {
   const boundsOf = (contours: Contour[]) => {
     const points = contours.flatMap((contour) => contour.points);
     const xs = points.map((point) => point.x);
@@ -311,7 +379,10 @@ describe("parseIcon — canonical frame", () => {
       maxY: Math.max(...ys),
     };
   };
-  const CIRCLE_16 = svg('<path d="M8 0A8 8 0 1 0 8 16A8 8 0 1 0 8 0Z"/>', ' viewBox="0 0 16 16"');
+  const CIRCLE_16 = svg(
+    '<path d="M8 0A8 8 0 1 0 8 16A8 8 0 1 0 8 0Z"/>',
+    ' viewBox="0 0 16 16"',
+  );
 
   it("puts a 16-unit and a 512-unit icon of the same shape into the same coordinate range", () => {
     const small = parseIcon(CIRCLE_16);
@@ -343,16 +414,22 @@ describe("parseIcon — canonical frame", () => {
 
   it("removes a non-zero viewBox origin", () => {
     const centered = parseIcon(
-      svg('<path d="M0 -8A8 8 0 1 0 0 8A8 8 0 1 0 0 -8Z"/>', ' viewBox="-8 -8 16 16"'),
+      svg(
+        '<path d="M0 -8A8 8 0 1 0 0 8A8 8 0 1 0 0 -8Z"/>',
+        ' viewBox="-8 -8 16 16"',
+      ),
     );
-    expect(boundsOf(centered.contours)).toEqual(boundsOf(contoursOf(CIRCLE_16)));
+    expect(boundsOf(centered.contours)).toEqual(
+      boundsOf(contoursOf(CIRCLE_16)),
+    );
   });
 
   it("preserves a non-square viewBox's aspect ratio instead of stretching (letter-B, 40 × 60)", () => {
-    const [outer, upperHole, lowerHole] = contoursOf(CUSTOM_TWO_HOLES).map((contour) =>
-      boundsOf([contour]),
+    const [outer, upperHole, lowerHole] = contoursOf(CUSTOM_TWO_HOLES).map(
+      (contour) => boundsOf([contour]),
     );
-    if (!outer || !upperHole || !lowerHole) throw new Error("expected three contours");
+    if (!outer || !upperHole || !lowerHole)
+      throw new Error("expected three contours");
     const scale = 100 / 60;
     // Height (the longest side) spans 0–100; the 40-unit width is centered: margins of 50/3.
     expect(outer.minX).toBeCloseTo(50 / 3, 12);
@@ -360,15 +437,24 @@ describe("parseIcon — canonical frame", () => {
     expect(outer.minY).toBeCloseTo(0, 12);
     expect(outer.maxY).toBeCloseTo(100, 12);
     // Width:height ratios match the source exactly, for the outer shape and for each hole.
-    expect((outer.maxX - outer.minX) / (outer.maxY - outer.minY)).toBeCloseTo(40 / 60, 12);
+    expect((outer.maxX - outer.minX) / (outer.maxY - outer.minY)).toBeCloseTo(
+      40 / 60,
+      12,
+    );
     for (const hole of [upperHole, lowerHole]) {
-      expect((hole.maxX - hole.minX) / (hole.maxY - hole.minY)).toBeCloseTo(20 / 18, 12);
+      expect((hole.maxX - hole.minX) / (hole.maxY - hole.minY)).toBeCloseTo(
+        20 / 18,
+        12,
+      );
     }
   });
 
   it("keeps a circle circular in a wide viewBox (same scale on both axes)", () => {
     const [circle] = contoursOf(
-      svg('<path d="M24 2A10 10 0 1 0 24 22A10 10 0 1 0 24 2Z"/>', ' viewBox="0 0 48 24"'),
+      svg(
+        '<path d="M24 2A10 10 0 1 0 24 22A10 10 0 1 0 24 2Z"/>',
+        ' viewBox="0 0 48 24"',
+      ),
     );
     const scale = 100 / 48;
     const center = { x: 24 * scale, y: 25 + 12 * scale };
@@ -379,7 +465,9 @@ describe("parseIcon — canonical frame", () => {
       expect(radius / (10 * scale)).toBeLessThan(1.0003);
     }
     const bounds = boundsOf(circle ? [circle] : []);
-    expect((bounds.maxX - bounds.minX) / (bounds.maxY - bounds.minY)).toBeCloseTo(1, 6);
+    expect(
+      (bounds.maxX - bounds.minX) / (bounds.maxY - bounds.minY),
+    ).toBeCloseTo(1, 6);
   });
 
   it("centers the viewBox, not the geometry: an off-center glyph stays off-center", () => {
@@ -393,8 +481,12 @@ describe("parseIcon — canonical frame", () => {
   });
 
   it("uses the width/height fallback frame the same way when there's no viewBox", () => {
-    const withViewBox = parseIcon(svg('<path d="M2 2H6V6H2Z"/>', ' viewBox="0 0 32 16"'));
-    const withSize = parseIcon(svg('<path d="M2 2H6V6H2Z"/>', ' width="32" height="16"'));
+    const withViewBox = parseIcon(
+      svg('<path d="M2 2H6V6H2Z"/>', ' viewBox="0 0 32 16"'),
+    );
+    const withSize = parseIcon(
+      svg('<path d="M2 2H6V6H2Z"/>', ' width="32" height="16"'),
+    );
     expect(withSize.contours).toEqual(withViewBox.contours);
     expect(withSize.viewBox).toEqual(withViewBox.viewBox);
     // And that shared frame is really applied (equality alone would also hold with no transform):
@@ -412,17 +504,22 @@ describe("parseIcon — canonical frame", () => {
     // 7.5e-8 canonical), so the leftmost top point must still win. A tolerance left in original
     // units would treat it as a strict ordering and pick the right-hand end.
     const [square] = contoursOf(
-      svg('<path d="M2 2.000000008 L14 2 L14 14 L2 14 Z"/>', ' viewBox="0 0 16 16"'),
+      svg(
+        '<path d="M2 2.000000008 L14 2 L14 14 L2 14 Z"/>',
+        ' viewBox="0 0 16 16"',
+      ),
     );
     expect(square?.points[0]?.x).toBeCloseTo(2 * 6.25, 9);
   });
 });
 
-describe("parseIcon — normalization", () => {
+describe("parseIcon - normalization", () => {
   it("winds every outer contour counter-clockwise on screen and every hole clockwise", () => {
     for (const markup of ALL_FILLED_FIXTURES) {
       for (const contour of contoursOf(markup)) {
-        expect(Math.sign(signedArea(contour.points))).toBe(contour.isHole ? 1 : -1);
+        expect(Math.sign(signedArea(contour.points))).toBe(
+          contour.isHole ? 1 : -1,
+        );
       }
     }
   });
@@ -458,21 +555,26 @@ describe("parseIcon — normalization", () => {
   });
 
   it("is deterministic: parsing the same markup twice gives equal output", () => {
-    for (const markup of ALL_FILLED_FIXTURES) expect(parseIcon(markup)).toEqual(parseIcon(markup));
+    for (const markup of ALL_FILLED_FIXTURES)
+      expect(parseIcon(markup)).toEqual(parseIcon(markup));
   });
 
   it("does not repeat the first point at the end of a contour", () => {
     for (const contour of contoursOf(FA_REGULAR_CIRCLE)) {
       const first = contour.points[0] as Point;
       const last = contour.points[contour.points.length - 1] as Point;
-      expect(Math.hypot(first.x - last.x, first.y - last.y)).toBeGreaterThan(1e-6);
+      expect(Math.hypot(first.x - last.x, first.y - last.y)).toBeGreaterThan(
+        1e-6,
+      );
     }
   });
 });
 
-describe("parseIcon — per-contour adaptive point density", () => {
+describe("parseIcon - per-contour adaptive point density", () => {
   it("scales tolerance with the icon, so the same shape gets the same point count at any size", () => {
-    const small = contoursOf(svg('<path d="M12 2A10 10 0 1 0 12 22A10 10 0 1 0 12 2Z"/>'));
+    const small = contoursOf(
+      svg('<path d="M12 2A10 10 0 1 0 12 22A10 10 0 1 0 12 2Z"/>'),
+    );
     const large = contoursOf(
       svg(
         '<path d="M256 0A256 256 0 1 0 256 512A256 256 0 1 0 256 0Z"/>',
@@ -484,10 +586,12 @@ describe("parseIcon — per-contour adaptive point density", () => {
   });
 
   it("gives each contour density for its own shape and size: straight edges stay sparse, a small dot is as smooth as a larger hole", () => {
-    const [square, hole, dot] = contoursOf(CUSTOM_BULLSEYE).map((contour) => contour.points.length);
+    const [square, hole, dot] = contoursOf(CUSTOM_BULLSEYE).map(
+      (contour) => contour.points.length,
+    );
     expect(square).toBe(4);
     // Tolerance is relative to each contour's own size (capped at the icon's), so two circles of
-    // different sizes get the same point count — the smaller one is not under-sampled.
+    // different sizes get the same point count - the smaller one is not under-sampled.
     expect(dot).toBe(hole);
   });
 
@@ -499,19 +603,33 @@ describe("parseIcon — per-contour adaptive point density", () => {
     const contours = contoursOf(FA_SOLID_BULLSEYE);
     const measure = (contour: Contour) => {
       const radius =
-        contour.points.reduce((sum, p) => sum + Math.hypot(p.x - 50, p.y - 50), 0) /
-        contour.points.length;
+        contour.points.reduce(
+          (sum, p) => sum + Math.hypot(p.x - 50, p.y - 50),
+          0,
+        ) / contour.points.length;
       let maxStep = 0;
       let maxGap = 0;
       contour.points.forEach((p, index) => {
         const q = contour.points[(index + 1) % contour.points.length] as Point;
-        const turn = Math.abs(Math.atan2(q.y - 50, q.x - 50) - Math.atan2(p.y - 50, p.x - 50));
+        const turn = Math.abs(
+          Math.atan2(q.y - 50, q.x - 50) - Math.atan2(p.y - 50, p.x - 50),
+        );
         maxStep = Math.max(maxStep, Math.min(turn, 2 * Math.PI - turn));
-        maxGap = Math.max(maxGap, radius - Math.hypot((p.x + q.x) / 2 - 50, (p.y + q.y) / 2 - 50));
+        maxGap = Math.max(
+          maxGap,
+          radius - Math.hypot((p.x + q.x) / 2 - 50, (p.y + q.y) / 2 - 50),
+        );
       });
-      return { radius, maxStep, relativeGap: maxGap / radius, count: contour.points.length };
+      return {
+        radius,
+        maxStep,
+        relativeGap: maxGap / radius,
+        count: contour.points.length,
+      };
     };
-    const byDepth = [...contours].sort((a, b) => a.depth - b.depth).map(measure);
+    const byDepth = [...contours]
+      .sort((a, b) => a.depth - b.depth)
+      .map(measure);
     const outer = byDepth[0] as ReturnType<typeof measure>;
     const innermost = byDepth[byDepth.length - 1] as ReturnType<typeof measure>;
     expect(contours.map((c) => c.depth).sort()).toEqual([0, 1, 2, 3, 4]);
@@ -523,7 +641,9 @@ describe("parseIcon — per-contour adaptive point density", () => {
       expect(ring.count).toBeGreaterThanOrEqual(outer.count);
     }
     // Absolute error shrinks with the contour, rather than staying at the icon-wide bound.
-    expect(innermost.relativeGap * innermost.radius).toBeLessThan(outer.relativeGap * outer.radius);
+    expect(innermost.relativeGap * innermost.radius).toBeLessThan(
+      outer.relativeGap * outer.radius,
+    );
   });
 
   it("keeps a flattened circle's area within 0.5% of the true area", () => {

@@ -52,15 +52,22 @@ function evaluate(
   const trace = runPlayback({ ...playback, config });
   const settled = checkSettling(trace, settling);
   const continuous = checkVelocityContinuity(trace, continuity);
-  const failures = [...settled.failures, ...continuous.failures].map((failure) => failure.message);
-  return { config, passed: failures.length === 0, settleTime: settled.settleTime, failures };
+  const failures = [...settled.failures, ...continuous.failures].map(
+    (failure) => failure.message,
+  );
+  return {
+    config,
+    passed: failures.length === 0,
+    settleTime: settled.settleTime,
+    failures,
+  };
 }
 
 /**
  * Deliverable #7 auto-tuning: adjusts stiffness/damping against the timing checks (settling and
  * velocity continuity) before anything is shown to a human. Deterministic grid search:
  *
- * 1. If `base` passes, it's returned unchanged — tuning never alters a feel that already works.
+ * 1. If `base` passes, it's returned unchanged - tuning never alters a feel that already works.
  * 2. Otherwise every stiffness × damping-ratio candidate (mass kept) is run, and the passing one
  *    **closest to `base`** is chosen (distance = |ln(k / k₀)| + |ζ − ζ₀|), ties going to the
  *    faster settle, then to candidate order. Staying close keeps the designer's intended feel.
@@ -73,7 +80,8 @@ export function autoTuneSpring(options: AutoTuneOptions): AutoTuneResult {
   const settling = options.settling ?? DEFAULT_SETTLING;
   const continuity = options.continuity ?? DEFAULT_CONTINUITY;
   const base = evaluate(options.base, options.playback, settling, continuity);
-  if (base.passed) return { config: options.base, baseConfigPassed: true, candidates: [base] };
+  if (base.passed)
+    return { config: options.base, baseConfigPassed: true, candidates: [base] };
 
   const candidates: AutoTuneCandidate[] = [base];
   for (const factor of options.stiffnessFactors ?? DEFAULT_STIFFNESS_FACTORS) {

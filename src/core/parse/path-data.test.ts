@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PathDataSyntaxError, parsePathData } from "./path-data";
 
-describe("parsePathData — commands", () => {
+describe("parsePathData - commands", () => {
   it("resolves absolute and relative lines, H and V into absolute line segments", () => {
     const [subpath] = parsePathData("M10 10 L20 10 l0 10 H5 h-2 V3 v1 Z");
     expect(subpath?.start).toEqual({ x: 10, y: 10 });
@@ -38,15 +38,27 @@ describe("parsePathData — commands", () => {
 
   it("reflects the previous cubic control point for S, and uses the current point otherwise", () => {
     const [afterCubic] = parsePathData("M0 0 C0 10 10 10 10 0 S20 -10 20 0Z");
-    expect(afterCubic?.segments[1]).toMatchObject({ kind: "cubic", ctrl1: { x: 10, y: -10 } });
+    expect(afterCubic?.segments[1]).toMatchObject({
+      kind: "cubic",
+      ctrl1: { x: 10, y: -10 },
+    });
     const [alone] = parsePathData("M0 0 S20 -10 20 0Z");
-    expect(alone?.segments[0]).toMatchObject({ kind: "cubic", ctrl1: { x: 0, y: 0 } });
+    expect(alone?.segments[0]).toMatchObject({
+      kind: "cubic",
+      ctrl1: { x: 0, y: 0 },
+    });
   });
 
   it("reflects the previous quadratic control point for T, chaining through T itself", () => {
     const [subpath] = parsePathData("M0 0 Q5 10 10 0 T20 0 T30 0Z");
-    expect(subpath?.segments[1]).toMatchObject({ kind: "quadratic", ctrl: { x: 15, y: -10 } });
-    expect(subpath?.segments[2]).toMatchObject({ kind: "quadratic", ctrl: { x: 25, y: 10 } });
+    expect(subpath?.segments[1]).toMatchObject({
+      kind: "quadratic",
+      ctrl: { x: 15, y: -10 },
+    });
+    expect(subpath?.segments[2]).toMatchObject({
+      kind: "quadratic",
+      ctrl: { x: 25, y: 10 },
+    });
   });
 
   it("parses arcs, including compact flags with no separators", () => {
@@ -68,7 +80,7 @@ describe("parsePathData — commands", () => {
   });
 });
 
-describe("parsePathData — number syntax", () => {
+describe("parsePathData - number syntax", () => {
   it("handles compressed numbers: '.5.5', '1-2', and exponents", () => {
     const [subpath] = parsePathData("M.5.5L1-2L1e1,2E-1Z");
     expect(subpath?.start).toEqual({ x: 0.5, y: 0.5 });
@@ -79,11 +91,14 @@ describe("parsePathData — number syntax", () => {
   });
 
   it("allows commas and any whitespace between parameters", () => {
-    expect(parsePathData("M 1 , 2\n\tL3,4 Z")[0]?.segments[0]?.to).toEqual({ x: 3, y: 4 });
+    expect(parsePathData("M 1 , 2\n\tL3,4 Z")[0]?.segments[0]?.to).toEqual({
+      x: 3,
+      y: 4,
+    });
   });
 });
 
-describe("parsePathData — subpaths", () => {
+describe("parsePathData - subpaths", () => {
   it("starts a new subpath at each move-to, relative to the closed subpath's start", () => {
     const subpaths = parsePathData("M10 10 h5 v5 z m2 2 h1 v1 z");
     expect(subpaths).toHaveLength(2);
@@ -98,10 +113,11 @@ describe("parsePathData — subpaths", () => {
   });
 
   it("records whether each subpath ended with Z", () => {
-    expect(parsePathData("M0 0 L1 0 L1 1 M5 5 L6 5 L6 6 Z").map((s) => s.hasClosePath)).toEqual([
-      false,
-      true,
-    ]);
+    expect(
+      parsePathData("M0 0 L1 0 L1 1 M5 5 L6 5 L6 6 Z").map(
+        (s) => s.hasClosePath,
+      ),
+    ).toEqual([false, true]);
   });
 
   it("drops a lone move-to that draws nothing", () => {
@@ -115,7 +131,7 @@ describe("parsePathData — subpaths", () => {
   });
 });
 
-describe("parsePathData — malformed input", () => {
+describe("parsePathData - malformed input", () => {
   const malformed: [string, string][] = [
     ["empty data", "   "],
     ["data not starting with a move-to", "L0 0 Z"],

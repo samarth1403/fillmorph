@@ -1,4 +1,9 @@
-import { type Contour, type ParsedIcon, parseIcon, renderContours } from "fillmorph";
+import {
+  type Contour,
+  type ParsedIcon,
+  parseIcon,
+  renderContours,
+} from "fillmorph";
 import { canonicalViewBoxAttribute, wrapInSvg } from "./display.ts";
 import { formatNumber } from "./geometry.ts";
 import { escapeHtml, renderPage, svgDataUri } from "./html.ts";
@@ -37,7 +42,9 @@ function compareReparse(
   const problems: string[] = [];
   let deviation = 0;
   if (reparsed.length !== original.length) {
-    problems.push(`re-parse gave ${reparsed.length} contours, expected ${original.length}`);
+    problems.push(
+      `re-parse gave ${reparsed.length} contours, expected ${original.length}`,
+    );
   }
   for (const [index, source] of original.entries()) {
     const copy = reparsed[index];
@@ -47,7 +54,8 @@ function compareReparse(
       copy.parentId === source.parentId &&
       copy.isHole === source.isHole &&
       copy.depth === source.depth;
-    if (!sameTree) problems.push(`contour ${source.id}: id/parentId/isHole/depth changed`);
+    if (!sameTree)
+      problems.push(`contour ${source.id}: id/parentId/isHole/depth changed`);
     if (copy.points.length !== source.points.length) {
       problems.push(
         `contour ${source.id}: ${copy.points.length} points after re-parse, expected ${source.points.length}`,
@@ -56,7 +64,11 @@ function compareReparse(
     }
     for (const [pointIndex, point] of source.points.entries()) {
       const copied = copy.points[pointIndex] as Contour["points"][number];
-      deviation = Math.max(deviation, Math.abs(copied.x - point.x), Math.abs(copied.y - point.y));
+      deviation = Math.max(
+        deviation,
+        Math.abs(copied.x - point.x),
+        Math.abs(copied.y - point.y),
+      );
     }
   }
   if (deviation > REPARSE_TOLERANCE) {
@@ -109,7 +121,9 @@ function renderRow(result: RoundTripResult): string {
     ? `<span class="pass">PASS</span>`
     : `<span class="fail">FAIL</span>`;
   const deviation =
-    result.maxReparseDeviation === null ? "n/a" : formatNumber(result.maxReparseDeviation, 6);
+    result.maxReparseDeviation === null
+      ? "n/a"
+      : formatNumber(result.maxReparseDeviation, 6);
   const problems =
     result.problems.length === 0
       ? ""
@@ -138,8 +152,10 @@ ${problems}
  * rendered in the display wrapper's canonical frame, in same-size square viewports. No
  * un-normalizing: the canonical mapping *is* the default square fit, so a correct parse lines up.
  */
-export function renderRoundTripPage(results: readonly RoundTripResult[]): string {
-  const body = `<h1>fillmorph harness — spec 02 round-trip check</h1>
+export function renderRoundTripPage(
+  results: readonly RoundTripResult[],
+): string {
+  const body = `<h1>fillmorph harness - spec 02 round-trip check</h1>
 <p class="lede">Each row: the source icon drawn standalone in a square viewport with its own viewBox, the parsed contours drawn via <code>renderContours</code> in the canonical frame at the same size, and the parsed outline overlaid in red on the source. A correct parse lines up exactly, holes included, and a non-square source is letterboxed identically.</p>
 ${results.map(renderRow).join("\n")}`;
   return renderPage("Spec 02 round-trip check", body);

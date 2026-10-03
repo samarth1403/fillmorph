@@ -4,9 +4,9 @@ import { signedArea } from "./geometry";
 /**
  * Normalizes one closed polygon's winding and start point, deterministically:
  *
- * 1. Winding — outer contours run counter-clockwise as displayed (negative shoelace area in
+ * 1. Winding - outer contours run counter-clockwise as displayed (negative shoelace area in
  *    SVG's y-down coordinates), holes clockwise, whatever the authored direction or fill-rule.
- * 2. Start point — the array is rotated to begin at the topmost point (smallest y), ties broken
+ * 2. Start point - the array is rotated to begin at the topmost point (smallest y), ties broken
  *    by leftmost (smallest x). Points whose y is within `tieTolerance` of the minimum count as
  *    tied, so floating-point noise on a flat top edge can't pick the right-hand end.
  *
@@ -20,12 +20,18 @@ export function normalizeContour(
   tieTolerance: number,
 ): Point[] {
   const isCounterClockwiseOnScreen = signedArea(points) < 0;
-  const oriented = isCounterClockwiseOnScreen === !isHole ? [...points] : [...points].reverse();
+  const oriented =
+    isCounterClockwiseOnScreen === !isHole
+      ? [...points]
+      : [...points].reverse();
   const startIndex = findCanonicalStart(oriented, tieTolerance);
   return [...oriented.slice(startIndex), ...oriented.slice(0, startIndex)];
 }
 
-function findCanonicalStart(points: readonly Point[], tieTolerance: number): number {
+function findCanonicalStart(
+  points: readonly Point[],
+  tieTolerance: number,
+): number {
   let minY = Number.POSITIVE_INFINITY;
   for (const point of points) minY = Math.min(minY, point.y);
 

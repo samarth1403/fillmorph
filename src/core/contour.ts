@@ -21,7 +21,7 @@ export type Point = { x: number; y: number };
 export type Contour = {
   /**
    * Identifies this contour within one `parseIcon` result (`"c0"`, `"c1"`, … in document order).
-   * Unique only within that result — two parsed icons both have a `"c0"`.
+   * Unique only within that result - two parsed icons both have a `"c0"`.
    */
   id: string;
   /** `id` of the innermost contour containing this one; `null` for depth-0 outer contours. */

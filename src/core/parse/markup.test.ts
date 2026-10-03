@@ -11,7 +11,7 @@ import {
 const svg = (body: string, rootAttributes = ""): string =>
   `<svg xmlns="http://www.w3.org/2000/svg"${rootAttributes}>${body}</svg>`;
 
-describe("parseSvgMarkup — source-agnostic extraction", () => {
+describe("parseSvgMarkup - source-agnostic extraction", () => {
   it("extracts the path from Font Awesome's single-line markup with a license comment", () => {
     const { root, paths } = parseSvgMarkup(FA_SOLID_HEART);
     expect(root.name).toBe("svg");
@@ -36,15 +36,23 @@ describe("parseSvgMarkup — source-agnostic extraction", () => {
 
   it("extracts every <path> in document order, including nested and non-rendered ones", () => {
     const { paths } = parseSvgMarkup(
-      svg('<defs><path id="a" d="M0 0"/></defs><g><path id="b" d="M1 1"/></g><path id="c"/>'),
+      svg(
+        '<defs><path id="a" d="M0 0"/></defs><g><path id="b" d="M1 1"/></g><path id="c"/>',
+      ),
     );
-    expect(paths.map((path) => path.element.attributes.get("id"))).toEqual(["a", "b", "c"]);
+    expect(paths.map((path) => path.element.attributes.get("id"))).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
     expect(paths.map((path) => path.index)).toEqual([0, 1, 2]);
     expect(paths[2]?.d).toBeUndefined();
   });
 
   it("decodes predefined entities and character references in attribute values", () => {
-    const { paths } = parseSvgMarkup(svg('<path id="a&amp;b&#x41;&#66;&lt;" d="M0 0"/>'));
+    const { paths } = parseSvgMarkup(
+      svg('<path id="a&amp;b&#x41;&#66;&lt;" d="M0 0"/>'),
+    );
     expect(paths[0]?.element.attributes.get("id")).toBe("a&bAB<");
   });
 
@@ -64,7 +72,7 @@ describe("parseSvgMarkup — source-agnostic extraction", () => {
   });
 });
 
-describe("parseSvgMarkup — does not judge content (that is stage 2's job)", () => {
+describe("parseSvgMarkup - does not judge content (that is stage 2's job)", () => {
   it("succeeds on a stroke icon", () => {
     expect(parseSvgMarkup(LUCIDE_HEART).paths[0]?.fill.value).toBe("none");
   });
@@ -74,7 +82,9 @@ describe("parseSvgMarkup — does not judge content (that is stage 2's job)", ()
   });
 
   it("succeeds on a path with malformed d data or no d at all", () => {
-    expect(parseSvgMarkup(svg('<path d="Q nonsense"/><path/>')).paths).toHaveLength(2);
+    expect(
+      parseSvgMarkup(svg('<path d="Q nonsense"/><path/>')).paths,
+    ).toHaveLength(2);
   });
 
   it("succeeds with transforms, <use>, and gradients present", () => {
@@ -85,7 +95,7 @@ describe("parseSvgMarkup — does not judge content (that is stage 2's job)", ()
   });
 });
 
-describe("parseSvgMarkup — effective fill and stroke", () => {
+describe("parseSvgMarkup - effective fill and stroke", () => {
   const onlyPath = (markup: string) => {
     const path = parseSvgMarkup(markup).paths[0];
     if (!path) throw new Error("fixture has no path");
@@ -112,24 +122,30 @@ describe("parseSvgMarkup — effective fill and stroke", () => {
   });
 
   it("inherits from an intermediate <g> before the root", () => {
-    const path = onlyPath(svg('<g fill="none"><path d="M0 0"/></g>', ' fill="red"'));
+    const path = onlyPath(
+      svg('<g fill="none"><path d="M0 0"/></g>', ' fill="red"'),
+    );
     expect(path.fill.value).toBe("none");
     expect(path.fill.source?.name).toBe("g");
   });
 
   it("lets an inline style declaration beat the same element's presentation attribute", () => {
-    const path = onlyPath(svg('<path fill="red" style="stroke:blue; fill: none" d="M0 0"/>'));
+    const path = onlyPath(
+      svg('<path fill="red" style="stroke:blue; fill: none" d="M0 0"/>'),
+    );
     expect(path.fill.value).toBe("none");
     expect(path.stroke.value).toBe("blue");
   });
 
   it("treats 'inherit' as deferring to the parent", () => {
-    const path = onlyPath(svg('<path fill="inherit" d="M0 0"/>', ' fill="none"'));
+    const path = onlyPath(
+      svg('<path fill="inherit" d="M0 0"/>', ' fill="none"'),
+    );
     expect(path.fill.value).toBe("none");
   });
 });
 
-describe("parseSvgMarkup — rejects markup that isn't well-formed SVG", () => {
+describe("parseSvgMarkup - rejects markup that isn't well-formed SVG", () => {
   const malformed: [string, string][] = [
     ["an empty string", ""],
     ["whitespace only", "   \n"],
@@ -141,7 +157,10 @@ describe("parseSvgMarkup — rejects markup that isn't well-formed SVG", () => {
     ["an unquoted attribute", "<svg><path d=M0/></svg>"],
     ["an attribute without a value", "<svg><path d/></svg>"],
     ["a duplicated attribute", '<svg><path d="M0" d="M1"/></svg>'],
-    ["attributes not separated by whitespace", '<svg><path id="a"d="M0"/></svg>'],
+    [
+      "attributes not separated by whitespace",
+      '<svg><path id="a"d="M0"/></svg>',
+    ],
     ["an unterminated attribute value", '<svg><path d="M0/></svg>'],
     ["'<' inside an attribute value", '<svg><path d="M0 <1"/></svg>'],
     ["a bare '&'", '<svg><path id="a & b" d="M0"/></svg>'],
@@ -157,16 +176,24 @@ describe("parseSvgMarkup — rejects markup that isn't well-formed SVG", () => {
   });
 
   it("throws FillmorphMarkupError when the root element isn't <svg>", () => {
-    expect(() => parseSvgMarkup('<html><path d="M0 0"/></html>')).toThrow(/root element is <html>/);
+    expect(() => parseSvgMarkup('<html><path d="M0 0"/></html>')).toThrow(
+      /root element is <html>/,
+    );
   });
 
   it("throws FillmorphMarkupError when there is no <path> at all", () => {
-    expect(() => parseSvgMarkup(svg('<circle r="4"/>'))).toThrow(FillmorphMarkupError);
-    expect(() => parseSvgMarkup(svg('<circle r="4"/>'))).toThrow(/no <path> element/);
+    expect(() => parseSvgMarkup(svg('<circle r="4"/>'))).toThrow(
+      FillmorphMarkupError,
+    );
+    expect(() => parseSvgMarkup(svg('<circle r="4"/>'))).toThrow(
+      /no <path> element/,
+    );
   });
 
   it("throws FillmorphMarkupError for non-string input from untyped callers", () => {
-    expect(() => parseSvgMarkup(undefined as unknown as string)).toThrow(FillmorphMarkupError);
+    expect(() => parseSvgMarkup(undefined as unknown as string)).toThrow(
+      FillmorphMarkupError,
+    );
   });
 
   it("reports the line of the problem", () => {
@@ -174,20 +201,28 @@ describe("parseSvgMarkup — rejects markup that isn't well-formed SVG", () => {
   });
 });
 
-describe("parseSvgMarkup — viewBox syntax", () => {
+describe("parseSvgMarkup - viewBox syntax", () => {
   it("parses whitespace- and comma-separated viewBox values, including negative origins", () => {
-    expect(parseSvgMarkup(FA_SOLID_HEART).viewBox).toEqual({ x: 0, y: 0, width: 512, height: 512 });
+    expect(parseSvgMarkup(FA_SOLID_HEART).viewBox).toEqual({
+      x: 0,
+      y: 0,
+      width: 512,
+      height: 512,
+    });
     expect(
-      parseSvgMarkup(svg('<path d="M0 0"/>', ' viewBox=" -1.5, -2 1e1\n24 "')).viewBox,
+      parseSvgMarkup(svg('<path d="M0 0"/>', ' viewBox=" -1.5, -2 1e1\n24 "'))
+        .viewBox,
     ).toEqual({ x: -1.5, y: -2, width: 10, height: 24 });
   });
 
-  it("leaves the viewBox undefined when absent — deciding what that means is stage 2's job", () => {
+  it("leaves the viewBox undefined when absent - deciding what that means is stage 2's job", () => {
     expect(parseSvgMarkup(svg('<path d="M0 0"/>')).viewBox).toBeUndefined();
   });
 
   it("accepts a zero-size viewBox, which is syntactically valid SVG", () => {
-    expect(parseSvgMarkup(svg('<path d="M0 0"/>', ' viewBox="0 0 0 0"')).viewBox).toEqual({
+    expect(
+      parseSvgMarkup(svg('<path d="M0 0"/>', ' viewBox="0 0 0 0"')).viewBox,
+    ).toEqual({
       x: 0,
       y: 0,
       width: 0,

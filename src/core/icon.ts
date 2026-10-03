@@ -7,7 +7,7 @@ export type ViewBox = { x: number; y: number; width: number; height: number };
 export type ParsedIcon = {
   /**
    * Every closed subpath of the icon, in document order. Points are in **canonical-frame**
-   * coordinates (`CANONICAL_VIEW_BOX`, 0 0 100 100), not the icon's original units — render them
+   * coordinates (`CANONICAL_VIEW_BOX`, 0 0 100 100), not the icon's original units - render them
    * in a `viewBox="0 0 100 100"`, not in `viewBox` below.
    */
   contours: Contour[];

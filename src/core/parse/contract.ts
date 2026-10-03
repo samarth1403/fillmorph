@@ -11,7 +11,7 @@ import {
 
 /**
  * Elements whose subtree never renders on its own (it only matters when referenced, and every
- * way of referencing it into the shape — `<use>`, a `url()` fill, `mask`, `clip-path` — is
+ * way of referencing it into the shape - `<use>`, a `url()` fill, `mask`, `clip-path` - is
  * rejected separately), plus purely descriptive elements. Their contents are ignored.
  */
 const NON_RENDERING_ELEMENTS = new Set([
@@ -32,10 +32,12 @@ const NON_RENDERING_ELEMENTS = new Set([
 const SHAPE_REFERENCE_PROPERTIES = ["mask", "clip-path"] as const;
 
 /** A root `width`/`height` attribute usable as a user-unit size: a plain number, optionally `px`. */
-const USER_UNIT_LENGTH_PATTERN = /^\s*((?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)(?:px)?\s*$/;
+const USER_UNIT_LENGTH_PATTERN =
+  /^\s*((?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)(?:px)?\s*$/;
 
-/** A bare number with no unit — valid as an SVG attribute, but invalid (and ignored) in CSS. */
-const UNITLESS_NUMBER_PATTERN = /^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?\s*$/;
+/** A bare number with no unit - valid as an SVG attribute, but invalid (and ignored) in CSS. */
+const UNITLESS_NUMBER_PATTERN =
+  /^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?\s*$/;
 
 /** Stage 2 contract output: what renders, and the frame it renders in. */
 export type IconContract = {
@@ -46,7 +48,7 @@ export type IconContract = {
 
 /**
  * Stage 2, contract half: decides whether a well-formed SVG is the kind of icon fillmorph
- * morphs — filled `<path>` geometry with nothing that would make the rendered shape differ from
+ * morphs - filled `<path>` geometry with nothing that would make the rendered shape differ from
  * the paths' own `d` data. Does not look inside `d`; geometry validity is checked afterwards.
  *
  * Checks run in a fixed order so the most useful message wins: a stroke icon is reported as a
@@ -68,7 +70,9 @@ export function validateIconContract(markup: SvgMarkup): IconContract {
   const problems: string[] = [];
   collectRendered(markup.root, true, renderedElements, problems);
 
-  const renderedPaths = markup.paths.filter((path) => renderedElements.has(path.element));
+  const renderedPaths = markup.paths.filter((path) =>
+    renderedElements.has(path.element),
+  );
 
   // Deliberately literal, per spec 02: *any* rendered path with fill: none rejects the icon. So
   // Material Design icons, which carry an invisible `<path d="M0 0h24v24H0z" fill="none"/>`
@@ -78,7 +82,7 @@ export function validateIconContract(markup: SvgMarkup): IconContract {
     if (path.fill.value.toLowerCase() === "none") {
       throw new FillmorphIncompatibleIconError(
         `${describePath(path)} has fill: none, stroke: ${path.stroke.value} ` +
-          `(${describeSources(path.fill, path.stroke)}) — fillmorph works with filled icons only. ` +
+          `(${describeSources(path.fill, path.stroke)}) - fillmorph works with filled icons only. ` +
           "This looks like a stroke/outline icon (as in Lucide or Tabler); use a filled icon instead.",
       );
     }
@@ -86,18 +90,22 @@ export function validateIconContract(markup: SvgMarkup): IconContract {
 
   if (findElement(markup.root, isStyleElement)) {
     throw new FillmorphIncompatibleIconError(
-      "The SVG contains a <style> element — fillmorph can't resolve stylesheet rules, so it can't " +
+      "The SVG contains a <style> element - fillmorph can't resolve stylesheet rules, so it can't " +
         "tell whether the icon is filled. Export the icon with fill set as attributes instead.",
     );
   }
 
   const firstProblem = problems[0];
-  if (firstProblem !== undefined) throw new FillmorphIncompatibleIconError(firstProblem);
+  if (firstProblem !== undefined)
+    throw new FillmorphIncompatibleIconError(firstProblem);
 
-  const useElement = findElement(markup.root, (element) => element.name === "use");
+  const useElement = findElement(
+    markup.root,
+    (element) => element.name === "use",
+  );
   if (useElement) {
     throw new FillmorphIncompatibleIconError(
-      "The SVG contains a <use> element — fillmorph can't morph shapes reused by reference. " +
+      "The SVG contains a <use> element - fillmorph can't morph shapes reused by reference. " +
         "Export the icon with every shape written out as a <path>.",
     );
   }
@@ -105,7 +113,7 @@ export function validateIconContract(markup: SvgMarkup): IconContract {
   for (const path of renderedPaths) {
     if (/^url\s*\(/i.test(path.fill.value)) {
       throw new FillmorphIncompatibleIconError(
-        `${describePath(path)} has fill: ${path.fill.value} — gradient and pattern fills aren't ` +
+        `${describePath(path)} has fill: ${path.fill.value} - gradient and pattern fills aren't ` +
           "supported; fillmorph works with solid-filled icons only.",
       );
     }
@@ -123,7 +131,7 @@ export function validateIconContract(markup: SvgMarkup): IconContract {
 /**
  * The icon's frame: its `viewBox` if it has one. Without one, SVG draws user units 1:1 onto a
  * viewport of the root's `width` × `height` from the origin, so `{ x: 0, y: 0, width, height }`
- * is the exact equivalent — provided both are plain user-unit numbers. Relative sizes (`%`,
+ * is the exact equivalent - provided both are plain user-unit numbers. Relative sizes (`%`,
  * `em`) depend on the embedding page, and with neither attribute browsers fall back to an
  * arbitrary 300×150 viewport, so both of those are rejected rather than guessed at.
  *
@@ -170,12 +178,17 @@ function readRootLength(
   const value = readPresentationValue(root, property);
   if (value?.via === "style" && UNITLESS_NUMBER_PATTERN.test(value.value)) {
     const fromAttribute = root.attributes.get(property)?.trim();
-    return fromAttribute ? { value: fromAttribute, via: "attribute" } : undefined;
+    return fromAttribute
+      ? { value: fromAttribute, via: "attribute" }
+      : undefined;
   }
   return value;
 }
 
-function describeLength(property: string, length: PresentationValue | undefined): string {
+function describeLength(
+  property: string,
+  length: PresentationValue | undefined,
+): string {
   if (length === undefined) return `no ${property}`;
   return length.via === "style"
     ? `style="${property}: ${length.value}"`
@@ -194,17 +207,23 @@ function collectRendered(
   rendered: Set<SvgElement>,
   problems: string[],
 ): void {
-  if (NON_RENDERING_ELEMENTS.has(element.name) || isForeignNamespace(element.name)) return;
+  if (
+    NON_RENDERING_ELEMENTS.has(element.name) ||
+    isForeignNamespace(element.name)
+  )
+    return;
 
   const isSupported =
-    element.name === "g" || element.name === "path" || (element.name === "svg" && isRoot);
+    element.name === "g" ||
+    element.name === "path" ||
+    (element.name === "svg" && isRoot);
   if (!isSupported) {
     // `<use>` gets its own, more specific message from the document-wide search below, so it
     // isn't reported here as an unsupported shape. (`<style>` never reaches this report: the
     // document-wide `<style>` check throws before rendered-tree problems are reported.)
     if (element.name !== "use") {
       problems.push(
-        `The SVG contains a <${element.name}> element — fillmorph morphs <path> geometry only. ` +
+        `The SVG contains a <${element.name}> element - fillmorph morphs <path> geometry only. ` +
           `Convert the <${element.name}> to a <path> (most editors call this "object to path").`,
       );
     }
@@ -214,7 +233,7 @@ function collectRendered(
   const transform = readPresentationValue(element, "transform");
   if (transform !== undefined && transform.value.toLowerCase() !== "none") {
     problems.push(
-      `A <${element.name}> element has ${describeProperty("transform", transform)} — fillmorph ` +
+      `A <${element.name}> element has ${describeProperty("transform", transform)} - fillmorph ` +
         "doesn't apply transforms. Flatten the transform into the path data before exporting.",
     );
     return;
@@ -223,7 +242,7 @@ function collectRendered(
     const reference = readPresentationValue(element, property);
     if (reference !== undefined && reference.value.toLowerCase() !== "none") {
       problems.push(
-        `A <${element.name}> element has ${describeProperty(property, reference)} — masks and ` +
+        `A <${element.name}> element has ${describeProperty(property, reference)} - masks and ` +
           "clip paths aren't supported, since they change the shape beyond what the path data " +
           "describes.",
       );
@@ -236,7 +255,7 @@ function collectRendered(
     const cssGeometry = readPresentationValue(element, "d");
     if (cssGeometry?.via === "style") {
       problems.push(
-        `A <path> element sets its geometry through ${describeProperty("d", cssGeometry)} — ` +
+        `A <path> element sets its geometry through ${describeProperty("d", cssGeometry)} - ` +
           'fillmorph reads path geometry from the "d" attribute only. Move the path data into ' +
           "the d attribute.",
       );
@@ -245,7 +264,8 @@ function collectRendered(
   }
 
   rendered.add(element);
-  for (const child of element.children) collectRendered(child, false, rendered, problems);
+  for (const child of element.children)
+    collectRendered(child, false, rendered, problems);
 }
 
 /** Editor metadata such as `sodipodi:namedview` or `rdf:RDF` lives in a foreign namespace. */

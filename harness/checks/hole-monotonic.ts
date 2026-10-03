@@ -1,6 +1,10 @@
 import type { Frame } from "../frames.ts";
 import { formatNumber, polygonArea } from "../geometry.ts";
-import { type CheckFailure, type CheckResult, checkResult } from "./check-result.ts";
+import {
+  type CheckFailure,
+  type CheckResult,
+  checkResult,
+} from "./check-result.ts";
 
 /**
  * A hole whose area in some frame is at most this fraction of its largest area counts as reaching
@@ -21,10 +25,10 @@ const AREA_NOISE_RATIO = 1e-9;
  *   Playback frames marked `isOnTarget` (drawn after their leg arrived) come after all the others,
  *   in progress order among themselves (spec 05's fourth reopen).
  * - A hole id present in some frame but missing (or no longer a hole) in another is a failure
- *   naming the id and the frame where it's missing — a hole vanishing between frames is itself a
+ *   naming the id and the frame where it's missing - a hole vanishing between frames is itself a
  *   discontinuity. Such a hole's area isn't judged further. **One exception** (spec 03 #5, as
- *   reopened for spec 05's settle rule): a hole may *leave* the sequence — be missing from every
- *   frame after some point, in progress order, and never return — once it has fully collapsed,
+ *   reopened for spec 05's settle rule): a hole may *leave* the sequence - be missing from every
+ *   frame after some point, in progress order, and never return - once it has fully collapsed,
  *   i.e. its area in the last frame it's present in is at most `COLLAPSED_AREA_RATIO` of its
  *   largest. That is what a settled morph does when it swaps the zero-area placeholder of a
  *   vanished hole for the exact target shape. Leaving before collapsing, reappearing after going
@@ -51,14 +55,16 @@ export function checkHoleMonotonic(frames: readonly Frame[]): CheckResult {
     .map((frame, index) => ({ frame, index }))
     .sort(
       (a, b) =>
-        Number(a.frame.isOnTarget === true) - Number(b.frame.isOnTarget === true) ||
+        Number(a.frame.isOnTarget === true) -
+          Number(b.frame.isOnTarget === true) ||
         a.frame.progress - b.frame.progress,
     );
 
   const holeIds: string[] = [];
   for (const { frame } of order) {
     for (const contour of frame.contours) {
-      if (contour.isHole && !holeIds.includes(contour.id)) holeIds.push(contour.id);
+      if (contour.isHole && !holeIds.includes(contour.id))
+        holeIds.push(contour.id);
     }
   }
 
@@ -69,7 +75,9 @@ export function checkHoleMonotonic(frames: readonly Frame[]): CheckResult {
     const missing: { index: number; frame: Frame }[] = [];
     let isReturning = false;
     for (const { frame, index } of order) {
-      const hole = frame.contours.find((contour) => contour.id === id && contour.isHole);
+      const hole = frame.contours.find(
+        (contour) => contour.id === id && contour.isHole,
+      );
       if (hole === undefined) {
         missing.push({ index, frame });
         continue;
@@ -86,10 +94,13 @@ export function checkHoleMonotonic(frames: readonly Frame[]): CheckResult {
       const hasLeftOnTarget =
         !isReturning &&
         track.length > 0 &&
-        (firstMissing.frame.progress > 1 || firstMissing.frame.isOnTarget === true);
+        (firstMissing.frame.progress > 1 ||
+          firstMissing.frame.isOnTarget === true);
       const hasLeftCollapsed =
         hasLeftOnTarget ||
-        (!isReturning && track.length > 0 && lastArea <= largest * COLLAPSED_AREA_RATIO);
+        (!isReturning &&
+          track.length > 0 &&
+          lastArea <= largest * COLLAPSED_AREA_RATIO);
       if (!hasLeftCollapsed) {
         const reason = isReturning
           ? "so it can't be tracked across the sequence"
@@ -104,7 +115,11 @@ export function checkHoleMonotonic(frames: readonly Frame[]): CheckResult {
         continue;
       }
       if (hasLeftOnTarget && lastArea > largest * COLLAPSED_AREA_RATIO) {
-        track.push({ area: 0, index: firstMissing.index, frame: firstMissing.frame });
+        track.push({
+          area: 0,
+          index: firstMissing.index,
+          frame: firstMissing.frame,
+        });
         areas.push(0);
         notes.push(
           `hole ${id} left the sequence past progress 1, held on the exact target, from ${firstMissing.frame.label}; counted as collapsed there`,
@@ -117,9 +132,13 @@ export function checkHoleMonotonic(frames: readonly Frame[]): CheckResult {
     }
     if (track.length < 2) continue;
     if (largest === 0) continue;
-    const pointIndex = areas.findIndex((area) => area <= largest * COLLAPSED_AREA_RATIO);
+    const pointIndex = areas.findIndex(
+      (area) => area <= largest * COLLAPSED_AREA_RATIO,
+    );
     if (pointIndex === -1) {
-      notes.push(`hole ${id} neither collapses to nor grows from a point; its area isn't gated`);
+      notes.push(
+        `hole ${id} neither collapses to nor grows from a point; its area isn't gated`,
+      );
       continue;
     }
 

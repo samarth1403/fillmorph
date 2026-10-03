@@ -1,5 +1,11 @@
 import type { Point } from "../contour";
-import { type Bounds, boundsOf, distanceToOutline, isPointInPolygon, signedArea } from "./geometry";
+import {
+  type Bounds,
+  boundsOf,
+  distanceToOutline,
+  isPointInPolygon,
+  signedArea,
+} from "./geometry";
 
 /** Where one polygon sits in the containment tree. */
 export type Nesting = {
@@ -22,7 +28,7 @@ export type Nesting = {
  * as inside nor as outside. Polygons must be non-self-intersecting and must not cross each other;
  * partially overlapping polygons are treated as not nested.
  *
- * This is containment only, as spec 02 locks it — winding and fill-rule are not consulted. So a
+ * This is containment only, as spec 02 locks it - winding and fill-rule are not consulted. So a
  * nested contour authored with the *same* winding as its container under `fill-rule="nonzero"`
  * (which browsers draw filled, not as a hole) is still classified as a hole here. A known
  * limitation of containment-only classification, not a bug.
@@ -50,7 +56,10 @@ export function classifyNesting(
       ) {
         depth++;
         // Strict `<` keeps the lowest index on an exact area tie, so the choice is deterministic.
-        if (parentIndex === null || outerArea < (areas[parentIndex] as number)) {
+        if (
+          parentIndex === null ||
+          outerArea < (areas[parentIndex] as number)
+        ) {
           parentIndex = outerIndex;
         }
       }
@@ -73,7 +82,11 @@ function isPolygonInside(
   return hasDecidingVertex;
 }
 
-function isBoundsWithin(inner: Bounds, outer: Bounds, tolerance: number): boolean {
+function isBoundsWithin(
+  inner: Bounds,
+  outer: Bounds,
+  tolerance: number,
+): boolean {
   return (
     inner.minX >= outer.minX - tolerance &&
     inner.minY >= outer.minY - tolerance &&

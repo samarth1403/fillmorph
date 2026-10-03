@@ -14,7 +14,7 @@ export const FA_SOLID_CIRCLE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox=
 /** A ring: outer r=256 and a hole r=208, both centred on (256, 256). */
 export const FA_REGULAR_CIRCLE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc. --><path d="M464 256A208 208 0 1 0 48 256a208 208 0 1 0 416 0zM0 256a256 256 0 1 1 512 0A256 256 0 1 1 0 256z"/></svg>`;
 
-/** Five concentric circles, nested to depth 4 — deeper than v1 guarantees. */
+/** Five concentric circles, nested to depth 4 - deeper than v1 guarantees. */
 export const FA_SOLID_BULLSEYE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc. --><path d="M448 256A192 192 0 1 0 64 256a192 192 0 1 0 384 0zM0 256a256 256 0 1 1 512 0A256 256 0 1 1 0 256zm256 80a80 80 0 1 0 0-160 80 80 0 1 0 0 160zm0-224a144 144 0 1 1 0 288 144 144 0 1 1 0-288zM224 256a32 32 0 1 1 64 0 32 32 0 1 1 -64 0z"/></svg>`;
 
 // Lucide (stroke): multi-line markup, license comment before the root, fill="none" on <svg>.
@@ -36,7 +36,7 @@ export const LUCIDE_HEART = `<!-- @license lucide-static v0.469.0 - ISC -->
 </svg>
 `;
 
-/** Contains both a `<circle>` and an open path — but the right diagnosis is "stroke icon". */
+/** Contains both a `<circle>` and an open path - but the right diagnosis is "stroke icon". */
 export const LUCIDE_CIRCLE_CHECK = `<!-- @license lucide-static v0.469.0 - ISC -->
 <svg
   class="lucide lucide-circle-check"
@@ -55,7 +55,7 @@ export const LUCIDE_CIRCLE_CHECK = `<!-- @license lucide-static v0.469.0 - ISC -
 </svg>
 `;
 
-// Custom: an Inkscape-style export — XML declaration, editor namespaces and metadata, a layer
+// Custom: an Inkscape-style export - XML declaration, editor namespaces and metadata, a layer
 // <g> without a transform, fill set through `style`, relative commands, comma separators, and a
 // polyarc ring (outer r=28, hole r=18, centred on (32, 32)).
 

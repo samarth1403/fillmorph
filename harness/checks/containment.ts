@@ -1,7 +1,15 @@
 import type { Contour, Point } from "fillmorph";
 import type { Frame } from "../frames.ts";
-import { formatNumber, isInsideOrOnPolygon, segmentsCross } from "../geometry.ts";
-import { type CheckFailure, type CheckResult, checkResult } from "./check-result.ts";
+import {
+  formatNumber,
+  isInsideOrOnPolygon,
+  segmentsCross,
+} from "../geometry.ts";
+import {
+  type CheckFailure,
+  type CheckResult,
+  checkResult,
+} from "./check-result.ts";
 
 /**
  * How close (in canonical units, out of 100) a child vertex may be to its parent's outline and
@@ -37,14 +45,16 @@ function findEscape(child: Contour, parent: Contour): string | null {
  * covers holes inside their outer shape and depth-2 shapes inside their hole alike.
  *
  * Contained means every child vertex is inside the parent (or on its outline) **and** no child
- * edge properly crosses a parent edge — vertices alone miss an edge cutting across a concave
+ * edge properly crosses a parent edge - vertices alone miss an edge cutting across a concave
  * parent's notch. Touching the outline is allowed; crossing it, or a `parentId` naming no contour
  * in the frame, is a failure.
  */
 export function checkContainment(frames: readonly Frame[]): CheckResult {
   const failures: CheckFailure[] = [];
   for (const [frameIndex, frame] of frames.entries()) {
-    const byId = new Map(frame.contours.map((contour) => [contour.id, contour]));
+    const byId = new Map(
+      frame.contours.map((contour) => [contour.id, contour]),
+    );
     for (const child of frame.contours) {
       if (child.parentId === null) continue;
       const parent = byId.get(child.parentId);
@@ -56,7 +66,7 @@ export function checkContainment(frames: readonly Frame[]): CheckResult {
         failures.push({
           frameIndices: [frameIndex],
           contourId: child.id,
-          message: `${frame.label}: ${child.isHole ? "hole" : "shape"} ${child.id} escapes parent ${child.parentId} — ${problem}`,
+          message: `${frame.label}: ${child.isHole ? "hole" : "shape"} ${child.id} escapes parent ${child.parentId} - ${problem}`,
         });
       }
     }
