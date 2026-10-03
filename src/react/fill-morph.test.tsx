@@ -12,22 +12,29 @@ import {
   type SpringConfig,
   startMorph,
 } from "fillmorph";
+import { Heart } from "lucide-react";
 import { act, Component, createRef, type ReactNode, StrictMode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FaCircle, FaHeart, FaRegCircle } from "react-icons/fa6";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import FillMorph, { type FillMorphHandle } from "./fill-morph";
+import { type FillMorphIcon, FillmorphIconInputError, getIconRendererState } from "./icon-source";
 import type { FillmorphError } from "./parse-icon-markup";
 import {
   CIRCLE,
   DIAMOND,
   enableActEnvironment,
+  FA_SOLID_HEART,
   type FakeFrames,
   FRAME_MS,
+  holdIconRendererLoad,
   installFakeAnimationFrames,
+  LUCIDE_HEART,
   MALFORMED,
   type Mounted,
   mount,
   pathData,
+  preloadIconRenderer,
   RING,
   SQUARE,
   STROKE_ONLY,
@@ -63,17 +70,22 @@ function track(tree: Mounted): Mounted {
 const contoursOf = (icon: string): Contour[] => parseIcon(icon).contours;
 const dOf = (icon: string): string => renderContours(contoursOf(icon));
 
+// Element icons resolve synchronously once react-dom/server is loaded; the "first element load"
+// tests below hold that load open on purpose, and every test after them starts loaded again.
+beforeAll(preloadIconRenderer);
+
 beforeEach(() => {
   enableActEnvironment();
   frames = installFakeAnimationFrames();
   now = 0;
 });
 
-afterEach(() => {
+afterEach(async () => {
   for (const tree of mounted) tree.unmount();
   mounted = [];
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  if (getIconRendererState().status !== "ready") await preloadIconRenderer();
 });
 
 /** Records what an error boundary caught, so a render-time throw can be asserted. */
@@ -507,5 +519,251 @@ describe("<FillMorph> errors", () => {
     tree.render(<FillMorph icon={SQUARE} to={MALFORMED} progress={0.5} onError={onError} />);
     expect(onError).toHaveBeenCalledTimes(1);
     expect(pathData(tree.container)).toBe(good);
+  });
+});
+
+describe("<FillMorph> with icon elements (spec 09)", () => {
+  it("draws react-icons' <FaHeart /> exactly as the same icon's markup string", () => {
+    const fromElement = track(mount(<FillMorph icon={<FaHeart />} />));
+    const fromString = track(mount(<FillMorph icon={FA_SOLID_HEART} />));
+    expect(pathData(fromElement.container)).not.toBe("");
+    expect(pathData(fromElement.container)).toBe(pathData(fromString.container));
+  });
+
+  it("morphs between elements and settles on the target, frame for frame like markup strings", () => {
+    const elements = track(mount(<FillMorph icon={<FaHeart />} springConfig={CONFIG} />));
+    const strings = track(mount(<FillMorph icon={FA_SOLID_HEART} springConfig={CONFIG} />));
+    const circle = renderToStaticMarkup(<FaCircle />);
+    elements.render(<FillMorph icon={<FaCircle />} springConfig={CONFIG} />);
+    strings.render(<FillMorph icon={circle} springConfig={CONFIG} />);
+    let frameCount = 0;
+    while (frames.pendingCount() > 0) {
+      if (++frameCount > 1000) throw new Error("the morph never settled");
+      nextFrame();
+      expect(pathData(elements.container)).toBe(pathData(strings.container));
+    }
+    expect(frameCount).toBeGreaterThan(2);
+    expect(pathData(elements.container)).toBe(dOf(circle));
+  });
+
+  it("mixes elements and strings freely in one morph", () => {
+    const tree = track(mount(<FillMorph icon={<FaHeart />} springConfig={CONFIG} />));
+    tree.render(<FillMorph icon={CIRCLE} springConfig={CONFIG} />);
+    runUntilIdle();
+    expect(pathData(tree.container)).toBe(dOf(CIRCLE));
+  });
+
+  it("treats a fresh but identical element on every render as the same icon", () => {
+    const tree = track(mount(<FillMorph icon={<FaHeart />} springConfig={CONFIG} />));
+    runUntilIdle();
+    const settled = pathData(tree.container);
+    tree.render(<FillMorph icon={<FaHeart />} springConfig={CONFIG} />);
+    expect(frames.pendingCount()).toBe(0);
+    expect(pathData(tree.container)).toBe(settled);
+  });
+
+  it("keeps a morphTo target across parent re-renders that recreate the icon element", () => {
+    const ref = createRef<FillMorphHandle>();
+    const tree = track(mount(<FillMorph ref={ref} icon={<FaHeart />} springConfig={CONFIG} />));
+    act(() => ref.current?.morphTo(<FaRegCircle />));
+    nextFrame();
+    tree.render(<FillMorph ref={ref} icon={<FaHeart />} springConfig={CONFIG} />);
+    runUntilIdle();
+    expect(pathData(tree.container)).toBe(dOf(renderToStaticMarkup(<FaRegCircle />)));
+  });
+
+  it("morphTo accepts an element", () => {
+    const ref = createRef<FillMorphHandle>();
+    const tree = track(mount(<FillMorph ref={ref} icon={SQUARE} springConfig={CONFIG} />));
+    act(() => ref.current?.morphTo(<FaHeart />));
+    runUntilIdle();
+    expect(pathData(tree.container)).toBe(dOf(FA_SOLID_HEART));
+  });
+
+  it("controlled mode takes elements for icon and to, identically to their markup", () => {
+    const circle = renderToStaticMarkup(<FaCircle />);
+    const fromElements = track(
+      mount(<FillMorph icon={<FaHeart />} to={<FaCircle />} progress={0.4} />),
+    );
+    const fromStrings = track(
+      mount(<FillMorph icon={FA_SOLID_HEART} to={circle} progress={0.4} />),
+    );
+    expect(pathData(fromElements.container)).toBe(
+      renderContours(interpolate(contoursOf(FA_SOLID_HEART), contoursOf(circle), 0.4)),
+    );
+    expect(pathData(fromElements.container)).toBe(pathData(fromStrings.container));
+    expect(frames.pendingCount()).toBe(0);
+  });
+
+  it("still rejects a stroke icon set's element (lucide-react), with the error its markup gets", () => {
+    const fromElement = vi.fn<(error: FillmorphError) => void>();
+    const fromString = vi.fn<(error: FillmorphError) => void>();
+    track(mount(<FillMorph icon={<Heart />} onError={fromElement} />));
+    track(mount(<FillMorph icon={LUCIDE_HEART} onError={fromString} />));
+    const elementError = fromElement.mock.calls[0]?.[0];
+    const stringError = fromString.mock.calls[0]?.[0];
+    expect(elementError).toBeInstanceOf(FillmorphIncompatibleIconError);
+    expect(stringError).toBeInstanceOf(FillmorphIncompatibleIconError);
+    expect(elementError?.message).toBe(stringError?.message);
+    expect(elementError?.message).toMatch(/fill: none.*filled icons only/);
+  });
+
+  it("throws a stroke icon element's rejection to the error boundary without onError", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const tree = track(
+      mount(
+        <Boundary>
+          <FillMorph icon={<Heart />} />
+        </Boundary>,
+      ),
+    );
+    expect(tree.container.textContent).toBe("caught");
+  });
+
+  it("reports an icon that is neither markup nor an element as a FillmorphIconInputError, once", () => {
+    const onError = vi.fn<(error: FillmorphError) => void>();
+    // A component where an element was meant: the classic slip this error names.
+    const component = FaHeart as unknown as FillMorphIcon;
+    const tree = track(mount(<FillMorph icon={component} onError={onError} />));
+    tree.render(<FillMorph icon={component} onError={onError} />);
+    expect(onError).toHaveBeenCalledTimes(1);
+    const error = onError.mock.calls[0]?.[0];
+    expect(error).toBeInstanceOf(FillmorphIconInputError);
+    expect(error).toBeInstanceOf(FillmorphMarkupError);
+    expect(error?.message).toMatch(/instead of an element/);
+    expect(pathData(tree.container)).toBe("");
+  });
+
+  it("throws an invalid icon input to the error boundary without onError", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const tree = track(
+      mount(
+        <Boundary>
+          <FillMorph icon={42 as unknown as FillMorphIcon} />
+        </Boundary>,
+      ),
+    );
+    expect(tree.container.textContent).toBe("caught");
+  });
+
+  it("works under StrictMode with an element icon and leaves no loop behind", () => {
+    const tree = track(
+      mount(
+        <StrictMode>
+          <FillMorph icon={<FaHeart />} springConfig={CONFIG} />
+        </StrictMode>,
+      ),
+    );
+    tree.render(
+      <StrictMode>
+        <FillMorph icon={<FaCircle />} springConfig={CONFIG} />
+      </StrictMode>,
+    );
+    runUntilIdle();
+    expect(pathData(tree.container)).toBe(dOf(renderToStaticMarkup(<FaCircle />)));
+  });
+});
+
+describe("<FillMorph> while react-dom/server first loads (spec 09 lazy load)", () => {
+  it("never loads react-dom/server for string icons, in any mode", () => {
+    const load = holdIconRendererLoad();
+    const ref = createRef<FillMorphHandle>();
+    const tree = track(mount(<FillMorph ref={ref} icon={SQUARE} springConfig={CONFIG} />));
+    tree.render(<FillMorph ref={ref} icon={CIRCLE} springConfig={CONFIG} />);
+    act(() => ref.current?.morphTo(RING));
+    runUntilIdle();
+    track(mount(<FillMorph icon={SQUARE} to={CIRCLE} progress={0.5} />));
+    track(mount(<FillMorph icon={MALFORMED} onError={() => {}} />));
+    expect(load.importer).not.toHaveBeenCalled();
+    expect(getIconRendererState().status).toBe("idle");
+    expect(pathData(tree.container)).toBe(dOf(RING));
+  });
+
+  it("draws nothing for a first element icon until it loads, then shows it at rest", async () => {
+    const load = holdIconRendererLoad();
+    const onError = vi.fn<(error: FillmorphError) => void>();
+    const tree = track(
+      mount(<FillMorph icon={<FaHeart />} springConfig={CONFIG} onError={onError} />),
+    );
+    expect(load.importer).toHaveBeenCalledTimes(1);
+    expect(pathData(tree.container)).toBe("");
+    expect(frames.pendingCount()).toBe(0);
+    await load.release();
+    // Shown at rest from the first frame it appears, not morphed in from anything.
+    const heart = contoursOf(FA_SOLID_HEART);
+    expect(pathData(tree.container)).toBe(renderContours(interpolate(heart, heart, 0)));
+    runUntilIdle();
+    expect(pathData(tree.container)).toBe(dOf(FA_SOLID_HEART));
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("an element icon change keeps the current shape until it loads, then morphs from it", async () => {
+    const load = holdIconRendererLoad();
+    const tree = track(mount(<FillMorph icon={SQUARE} springConfig={CONFIG} />));
+    runUntilIdle();
+    tree.render(<FillMorph icon={<FaHeart />} springConfig={CONFIG} />);
+    expect(pathData(tree.container)).toBe(dOf(SQUARE));
+    expect(frames.pendingCount()).toBe(0);
+    await load.release();
+    nextFrame();
+    nextFrame();
+    const midway = pathData(tree.container);
+    expect(midway).not.toBe(dOf(SQUARE));
+    expect(midway).not.toBe(dOf(FA_SOLID_HEART));
+    runUntilIdle();
+    expect(pathData(tree.container)).toBe(dOf(FA_SOLID_HEART));
+  });
+
+  it("a morphTo element mid-morph lets the current morph carry on until it loads", async () => {
+    const load = holdIconRendererLoad();
+    const ref = createRef<FillMorphHandle>();
+    const tree = track(mount(<FillMorph ref={ref} icon={SQUARE} springConfig={CONFIG} />));
+    tree.render(<FillMorph ref={ref} icon={CIRCLE} springConfig={CONFIG} />);
+    nextFrame();
+    act(() => ref.current?.morphTo(<FaHeart />));
+    // Still heading for the circle: the pending element doesn't stop or snap the motion.
+    runUntilIdle();
+    expect(pathData(tree.container)).toBe(dOf(CIRCLE));
+    await load.release();
+    runUntilIdle();
+    expect(pathData(tree.container)).toBe(dOf(FA_SOLID_HEART));
+  });
+
+  it("keeps a morphTo target when the parent re-renders a fresh element during the load", async () => {
+    const load = holdIconRendererLoad();
+    const ref = createRef<FillMorphHandle>();
+    const tree = track(mount(<FillMorph ref={ref} icon={<FaHeart />} springConfig={CONFIG} />));
+    act(() => ref.current?.morphTo(SQUARE));
+    tree.render(<FillMorph ref={ref} icon={<FaHeart />} springConfig={CONFIG} />);
+    await load.release();
+    runUntilIdle();
+    expect(pathData(tree.container)).toBe(dOf(SQUARE));
+  });
+
+  it("controlled mode draws nothing until its element icons load, then interpolates them", async () => {
+    const load = holdIconRendererLoad();
+    const tree = track(mount(<FillMorph icon={<FaHeart />} to={CIRCLE} progress={0.5} />));
+    expect(pathData(tree.container)).toBe("");
+    await load.release();
+    expect(pathData(tree.container)).toBe(
+      renderContours(interpolate(contoursOf(FA_SOLID_HEART), contoursOf(CIRCLE), 0.5)),
+    );
+    expect(frames.pendingCount()).toBe(0);
+  });
+
+  it("reports a failed load through onError as a FillmorphIconInputError; strings still work", async () => {
+    const load = holdIconRendererLoad();
+    const onError = vi.fn<(error: FillmorphError) => void>();
+    const tree = track(mount(<FillMorph icon={SQUARE} springConfig={CONFIG} onError={onError} />));
+    tree.render(<FillMorph icon={<FaHeart />} springConfig={CONFIG} onError={onError} />);
+    await load.fail(new Error("Failed to fetch dynamically imported module"));
+    expect(onError).toHaveBeenCalledTimes(1);
+    const error = onError.mock.calls[0]?.[0];
+    expect(error).toBeInstanceOf(FillmorphIconInputError);
+    expect(error?.message).toMatch(/couldn't load `react-dom\/server`.*Failed to fetch/);
+    expect(pathData(tree.container)).toBe(dOf(SQUARE));
+    tree.render(<FillMorph icon={CIRCLE} springConfig={CONFIG} onError={onError} />);
+    runUntilIdle();
+    expect(pathData(tree.container)).toBe(dOf(CIRCLE));
   });
 });

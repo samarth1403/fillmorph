@@ -16,7 +16,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { type FillmorphError, type IconParse, parseIconMarkup } from "./parse-icon-markup";
+import type { FillMorphIcon } from "./icon-source";
+import { type FillmorphError, type IconParse, useIconParse } from "./parse-icon-markup";
 import { useFillMorph } from "./use-fill-morph";
 
 /**
@@ -30,8 +31,11 @@ export type FillMorphSvgProps = Omit<
 >;
 
 type FillMorphOwnProps = {
-  /** Full SVG markup (spec 02's contract). Uncontrolled: the icon to show and morph to. */
-  icon: string;
+  /**
+   * Full SVG markup (spec 02's contract), or a React element that renders it, such as
+   * `<FaHeart />` (spec 09). Uncontrolled: the icon to show and morph to.
+   */
+  icon: FillMorphIcon;
   /** Spec 05's spring; the driver's default if omitted. Uncontrolled mode only. */
   springConfig?: SpringConfig;
   /**
@@ -55,8 +59,8 @@ export type FillMorphProps = FillMorphSvgProps &
          * the geometry can't extrapolate: past 1, a collapsing hole would turn inside out.
          */
         progress: number;
-        /** Controlled mode: full SVG markup of the icon at `progress` 1. */
-        to: string;
+        /** Controlled mode: the icon at `progress` 1, as markup or an element like `icon`. */
+        to: FillMorphIcon;
       }
   );
 
@@ -66,7 +70,7 @@ export type FillMorphHandle = {
    * Uncontrolled mode: morphs to `icon` from whatever is on screen, the same path as changing the
    * `icon` prop. In controlled mode it does nothing but warn in development.
    */
-  morphTo: (icon: string) => void;
+  morphTo: (icon: FillMorphIcon) => void;
 };
 
 const VIEW_BOX = [
@@ -133,7 +137,7 @@ const MorphSvg = ({
 };
 
 type ModeProps = {
-  icon: string;
+  icon: FillMorphIcon;
   onError: ((error: FillmorphError) => void) | undefined;
   svgProps: FillMorphSvgProps;
   handleRef: ForwardedRef<FillMorphHandle>;
@@ -159,9 +163,9 @@ const ControlledFillMorph = ({
   onError,
   svgProps,
   handleRef,
-}: ModeProps & { to: string; progress: number }): ReactElement => {
-  const fromParsed = useMemo(() => parseIconMarkup(icon), [icon]);
-  const toParsed = useMemo(() => parseIconMarkup(to), [to]);
+}: ModeProps & { to: FillMorphIcon; progress: number }): ReactElement => {
+  const fromParsed = useIconParse(icon);
+  const toParsed = useIconParse(to);
   const from = useLastParsed(fromParsed);
   const target = useLastParsed(toParsed);
   useImperativeHandle(
@@ -188,7 +192,8 @@ const ControlledFillMorph = ({
 
 /**
  * Morphs filled SVG icons (spec 06), rendering one `<svg viewBox={CANONICAL_VIEW_BOX}>` with a
- * single `<path>` drawn by core's `renderContours`.
+ * single `<path>` drawn by core's `renderContours`. Icons are full SVG markup or React elements
+ * that render it (`icon={<FaHeart />}`, spec 09); either way they must meet spec 02's contract.
  *
  * - **Uncontrolled** (no `progress`): shows `icon`; changing it springs to the new icon from
  *   whatever is on screen, interruptions included (`useFillMorph`, over `fillmorph/dom`'s

@@ -1,20 +1,23 @@
 import type { Contour, SpringConfig } from "fillmorph";
 import { createMorphDriver, type MorphDriver } from "fillmorph/dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type FillmorphError, parseIconMarkup } from "./parse-icon-markup";
+import { type FillMorphIcon, isSameIcon, useResolvedIcon, useResolvedSlot } from "./icon-source";
+import { type FillmorphError, useParsedIcon } from "./parse-icon-markup";
 
 /** What `useFillMorph` returns on every render. */
 export type UseFillMorphResult = {
   /**
    * The shape to draw now, in spec 02's canonical frame: draw it inside a `CANONICAL_VIEW_BOX`
-   * frame, never the icon's original `viewBox`. Empty only if no icon has parsed yet.
+   * frame, never the icon's original `viewBox`. Empty only if no icon has parsed yet: with `error`
+   * also `null`, that means the first icon is an element still waiting for `react-dom/server` to
+   * load (once per page, spec 09).
    */
   contours: Contour[];
   /**
-   * Morphs to `icon` (full SVG markup) from whatever is on screen, like changing the hook's
-   * `icon` argument, until that argument changes again. Stable across renders.
+   * Morphs to `icon` (full SVG markup or a React element) from whatever is on screen, like
+   * changing the hook's `icon` argument, until that argument changes again. Stable across renders.
    */
-  retarget: (icon: string) => void;
+  retarget: (icon: FillMorphIcon) => void;
   /**
    * The rejection of the icon most recently asked for, or `null` if it parsed. While set, the
    * morph carries on toward the last icon that did parse.
@@ -63,21 +66,31 @@ function useStableConfig(config: SpringConfig | undefined): SpringConfig | undef
  *   from rest at that point, but nothing jumps;
  * - unmounting unsubscribes and calls `stop()`, so no frame runs afterwards.
  *
- * `icon` is full SVG markup (spec 02's contract). A rejected icon is reported through `error` and
- * never thrown by the hook; an invalid `config` throws from the driver, as `createMorphDriver`
- * does.
+ * `icon` is full SVG markup (spec 02's contract) or a React element that renders it (spec 09).
+ * Icons are compared by markup, so an element recreated every render (`<FaHeart />`) is the same
+ * icon each time; it is re-rendered to markup whenever its identity changes, which a module-level
+ * or memoized element avoids. A rejected icon is reported through `error` and never thrown by the
+ * hook; an invalid `config` throws from the driver, as `createMorphDriver` does.
+ *
+ * Elements need `react-dom/server`, loaded on first use (spec 09). Until it arrives, an element
+ * target is pending: the shape on screen carries on as if the target hadn't changed yet, and the
+ * very first icon, if it's an element, shows nothing. Strings never wait.
  */
-export function useFillMorph(icon: string, config?: SpringConfig): UseFillMorphResult {
+export function useFillMorph(icon: FillMorphIcon, config?: SpringConfig): UseFillMorphResult {
+  const resolved = useResolvedIcon(icon);
   // An imperative `retarget` wins until `icon` itself changes; tracking the `icon` it was made
   // under means a later change back to that value doesn't revive a stale override.
-  const [request, setRequest] = useState<{ icon: string; override: string | null }>({
-    icon,
-    override: null,
-  });
-  if (request.icon !== icon) setRequest({ icon, override: null });
-  const target = request.icon === icon && request.override !== null ? request.override : icon;
+  const [request, setRequest] = useState<{
+    icon: FillMorphIcon;
+    override: { icon: FillMorphIcon } | null;
+  }>({ icon, override: null });
+  const requestIcon = useResolvedIcon(request.icon);
+  const override = useResolvedSlot(request.override);
+  const isCurrentIcon = isSameIcon(request.icon, requestIcon, icon, resolved);
+  if (!isCurrentIcon) setRequest({ icon, override: null });
+  const target = isCurrentIcon && override !== null ? override : resolved;
 
-  const parsed = useMemo(() => parseIconMarkup(target), [target]);
+  const parsed = useParsedIcon(target);
   const springConfig = useStableConfig(config);
 
   const [emitted, setEmitted] = useState<Contour[] | null>(null);
@@ -113,8 +126,8 @@ export function useFillMorph(icon: string, config?: SpringConfig): UseFillMorphR
     [],
   );
 
-  const retarget = useCallback((next: string) => {
-    setRequest((current) => ({ icon: current.icon, override: next }));
+  const retarget = useCallback((next: FillMorphIcon) => {
+    setRequest((current) => ({ icon: current.icon, override: { icon: next } }));
   }, []);
 
   return { contours: emitted ?? parsed.contours ?? [], retarget, error: parsed.error };

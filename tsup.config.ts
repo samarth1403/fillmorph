@@ -31,5 +31,6 @@ export default defineConfig({
   },
   // Subpaths import each other through the package's own public specifiers, so they must stay
   // external: bundling core into dom/react would duplicate it and break consumer tree-shaking.
-  external: ["fillmorph", "fillmorph/dom", "react", /^react\//],
+  // React and react-dom are the consumer's own copies (optional peers), never bundled.
+  external: ["fillmorph", "fillmorph/dom", "react", /^react\//, "react-dom", /^react-dom\//],
 });
