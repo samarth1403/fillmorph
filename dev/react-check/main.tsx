@@ -1,3 +1,4 @@
+import { HeartIcon, StarIcon } from "@heroicons/react/24/solid";
 import {
   FillMorph,
   type FillMorphHandle,
@@ -7,6 +8,7 @@ import {
 import { Heart as LucideHeart } from "lucide-react";
 import { type ReactElement, type RefObject, StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import type { IconBaseProps } from "react-icons";
 import {
   FaB,
   FaBullseye,
@@ -227,17 +229,23 @@ const ImperativeSection = ({
  * data as the committed fixture), passed as an element rather than markup. Created inline on every
  * render on purpose, as typical app code does, so a needless restart would show.
  */
-const ELEMENT_TWINS: Record<FixtureName, { label: string; render: () => ReactElement }> = {
-  "fa-regular-bell": { label: "<FaRegBell />", render: () => <FaRegBell /> },
-  "fa-regular-circle": { label: "<FaRegCircle />", render: () => <FaRegCircle /> },
-  "fa-regular-circle-dot": { label: "<FaRegCircleDot />", render: () => <FaRegCircleDot /> },
-  "fa-regular-heart": { label: "<FaRegHeart />", render: () => <FaRegHeart /> },
-  "fa-regular-star": { label: "<FaRegStar />", render: () => <FaRegStar /> },
-  "fa-solid-b": { label: "<FaB />", render: () => <FaB /> },
-  "fa-solid-bullseye": { label: "<FaBullseye />", render: () => <FaBullseye /> },
-  "fa-solid-circle": { label: "<FaCircle />", render: () => <FaCircle /> },
-  "fa-solid-heart": { label: "<FaHeart />", render: () => <FaHeart /> },
-  "fa-solid-user": { label: "<FaUser />", render: () => <FaUser /> },
+const ELEMENT_TWINS: Record<
+  FixtureName,
+  { label: string; render: (props?: IconBaseProps) => ReactElement }
+> = {
+  "fa-regular-bell": { label: "<FaRegBell />", render: (props) => <FaRegBell {...props} /> },
+  "fa-regular-circle": { label: "<FaRegCircle />", render: (props) => <FaRegCircle {...props} /> },
+  "fa-regular-circle-dot": {
+    label: "<FaRegCircleDot />",
+    render: (props) => <FaRegCircleDot {...props} />,
+  },
+  "fa-regular-heart": { label: "<FaRegHeart />", render: (props) => <FaRegHeart {...props} /> },
+  "fa-regular-star": { label: "<FaRegStar />", render: (props) => <FaRegStar {...props} /> },
+  "fa-solid-b": { label: "<FaB />", render: (props) => <FaB {...props} /> },
+  "fa-solid-bullseye": { label: "<FaBullseye />", render: (props) => <FaBullseye {...props} /> },
+  "fa-solid-circle": { label: "<FaCircle />", render: (props) => <FaCircle {...props} /> },
+  "fa-solid-heart": { label: "<FaHeart />", render: (props) => <FaHeart {...props} /> },
+  "fa-solid-user": { label: "<FaUser />", render: (props) => <FaUser {...props} /> },
 };
 
 const ElementSection = (): ReactElement => {
@@ -245,7 +253,9 @@ const ElementSection = (): ReactElement => {
   const [progress, setProgress] = useState(0.5);
   const [isStroke, setIsStroke] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isHeroHeart, setIsHeroHeart] = useState(true);
   const icon: FillMorphIcon = isStroke ? <LucideHeart /> : ELEMENT_TWINS[name].render();
+  const twinIndex = FIXTURE_LIST.indexOf(name);
 
   return (
     <section>
@@ -287,6 +297,39 @@ const ElementSection = (): ReactElement => {
         </button>
       </div>
       {error !== null ? <p className="error">{error}</p> : null}
+      <h3>Attributes from the element (0.2.1)</h3>
+      <p>
+        These two <code>&lt;FillMorph&gt;</code>s get no <code>fill</code>, size or style props of
+        their own: everything comes from the element's rendered <code>&lt;svg&gt;</code>. Left: the
+        same twin as above, styled by react-icons' own <code>color</code>/<code>size</code>,
+        alternating crimson and royal blue per icon. Right: heroicons, styled by plain{" "}
+        <code>style</code>. Look for: the size and color matching the element, the color snapping
+        (not fading) at each change while the shape springs, and the bounce not being clipped.
+      </p>
+      <div className="buttons">
+        <FillMorph
+          icon={ELEMENT_TWINS[name].render({
+            color: twinIndex % 2 === 0 ? "crimson" : "royalblue",
+            size: 120,
+          })}
+          aria-label="Element attributes, react-icons"
+        />
+        <FillMorph
+          icon={
+            isHeroHeart ? (
+              <HeartIcon style={{ color: "seagreen", width: 120, height: 120 }} />
+            ) : (
+              <StarIcon style={{ color: "darkorange", width: 120, height: 120 }} />
+            )
+          }
+          aria-label="Element attributes, heroicons"
+        />
+      </div>
+      <div className="buttons">
+        <button type="button" onClick={() => setIsHeroHeart((value) => !value)}>
+          heroicons: {isHeroHeart ? "<HeartIcon /> → <StarIcon />" : "<StarIcon /> → <HeartIcon />"}
+        </button>
+      </div>
       <h3>Controlled, elements for both ends</h3>
       <FillMorph
         icon={<FaRegCircleDot />}

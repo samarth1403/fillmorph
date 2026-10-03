@@ -96,9 +96,17 @@ export const Like = ({ liked }: { liked: boolean }) => {
 The element is rendered to SVG markup (with `react-dom/server`'s `renderToStaticMarkup`)
 and checked exactly like a string, so it has to be a filled icon too. A few things to know:
 
+- **Its look comes along.** Whatever attributes the element puts on its own `<svg>` -
+  `fill`, `width`/`height`, `class`, `style`, `aria-*`, `data-*`, whatever your icon library
+  uses for color and size - go onto `<FillMorph>`'s `<svg>`. So `<FaHeart color="red"
+  size={32} />` morphs red at 32px, with any icon library. Props you pass `<FillMorph>`
+  itself win, except `className` and `style`, which combine. fillmorph keeps `viewBox`,
+  `preserveAspectRatio`, `x`, `y` and `overflow` for its own drawing frame, and never copies
+  `id` (two of the same icon would duplicate it). When the icon changes, its attributes
+  switch instantly - only the shape animates.
 - **It's rendered on its own,** outside your app's component tree. So context providers
   above `<FillMorph>` (like react-icons' `IconContext.Provider`) don't reach it - only the
-  icon's own defaults apply. That's fine for size and color, which fillmorph ignores anyway.
+  icon's own defaults and the props on the element itself apply.
 - **`react-dom/server` loads on first use.** The first time any element icon shows up on a
   page, it waits for that module to load (once per page) and draws nothing new until then.
   After that, elements are as instant as strings. Apps that only pass strings never load it.
@@ -145,7 +153,7 @@ One package, three entry points:
 | `fillmorph/react` | `<FillMorph>` and `useFillMorph`.                                | React ≥18, React DOM ≥18 |
 
 ESM only, with TypeScript types included. Unminified ESM, gzipped: core 15.2 KB, dom 0.6 KB,
-react 3.4 KB (measured on the 0.2.0 build). Icon elements need `react-dom/server`, which
+react 5.0 KB (measured on the 0.2.1 build). Icon elements need `react-dom/server`, which
 `fillmorph/react` loads with a dynamic `import()` only when an element is first used, so
 bundlers split it into its own chunk (about 61 KB gzipped with React 19) that string-only
 apps never download.

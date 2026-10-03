@@ -17,8 +17,16 @@ import {
   useState,
 } from "react";
 import type { FillMorphIcon } from "./icon-source";
-import { type FillmorphError, type IconParse, useIconParse } from "./parse-icon-markup";
-import { useFillMorph } from "./use-fill-morph";
+import { useResolvedIcon } from "./icon-source";
+import { type IconSvgProps, mergeSvgProps } from "./icon-svg-props";
+import {
+  type FillmorphError,
+  type IconParse,
+  useIconSvgProps,
+  useLastParsedIcon,
+  useParsedIcon,
+} from "./parse-icon-markup";
+import { useFillMorphWithIconProps } from "./use-fill-morph";
 
 /**
  * Props forwarded untouched to the rendered root `<svg>` (`className`, `aria-label`, `fill`,
@@ -120,17 +128,23 @@ function useLastParsed(parsed: IconParse): Contour[] | null {
  * the bounce off. It's a presentation attribute, not inline style, so any CSS the caller sets (a
  * class or `style`) still wins, and so does an `overflow` prop. Geometry inside the frame draws
  * the same either way.
+ *
+ * An icon given as a React element also lends its rendered root `<svg>` attributes (`fill`,
+ * `width`, `class`, `style`, `aria-*`, …; see `toIconSvgProps` for the few fillmorph keeps), with
+ * the caller's own props winning and `className`/`style` combining (spec 09, 0.2.1).
  */
 const MorphSvg = ({
   contours,
   svgProps,
+  iconSvgProps,
 }: {
   contours: Contour[];
   svgProps: FillMorphSvgProps;
+  iconSvgProps: IconSvgProps | null;
 }): ReactElement => {
   return (
     // biome-ignore lint/a11y/noSvgWithoutTitle: the caller names it (or hides it) via passthrough `aria-*`/`role` props
-    <svg overflow="visible" {...svgProps} viewBox={VIEW_BOX}>
+    <svg overflow="visible" {...mergeSvgProps(iconSvgProps, svgProps)} viewBox={VIEW_BOX}>
       <path d={renderContours(contours)} />
     </svg>
   );
@@ -150,10 +164,10 @@ const UncontrolledFillMorph = ({
   svgProps,
   handleRef,
 }: ModeProps & { springConfig: SpringConfig | undefined }): ReactElement => {
-  const { contours, retarget, error } = useFillMorph(icon, springConfig);
+  const { contours, retarget, error, iconSvgProps } = useFillMorphWithIconProps(icon, springConfig);
   useImperativeHandle(handleRef, () => ({ morphTo: retarget }), [retarget]);
   useSurfacedError(error, onError);
-  return <MorphSvg contours={contours} svgProps={svgProps} />;
+  return <MorphSvg contours={contours} svgProps={svgProps} iconSvgProps={iconSvgProps} />;
 };
 
 const ControlledFillMorph = ({
@@ -164,10 +178,14 @@ const ControlledFillMorph = ({
   svgProps,
   handleRef,
 }: ModeProps & { to: FillMorphIcon; progress: number }): ReactElement => {
-  const fromParsed = useIconParse(icon);
-  const toParsed = useIconParse(to);
+  const fromIcon = useResolvedIcon(icon);
+  const toIcon = useResolvedIcon(to);
+  const fromParsed = useParsedIcon(fromIcon);
+  const toParsed = useParsedIcon(toIcon);
   const from = useLastParsed(fromParsed);
   const target = useLastParsed(toParsed);
+  const fromShown = useLastParsedIcon(fromIcon, fromParsed);
+  const toShown = useLastParsedIcon(toIcon, toParsed);
   useImperativeHandle(
     handleRef,
     () => ({
@@ -187,7 +205,9 @@ const ControlledFillMorph = ({
     () => (from !== null && target !== null ? interpolate(from, target, clamped) : (from ?? [])),
     [from, target, clamped],
   );
-  return <MorphSvg contours={contours} svgProps={svgProps} />;
+  // Attributes don't interpolate: they snap from `icon`'s to `to`'s halfway through.
+  const iconSvgProps = useIconSvgProps(clamped < 0.5 ? fromShown : toShown);
+  return <MorphSvg contours={contours} svgProps={svgProps} iconSvgProps={iconSvgProps} />;
 };
 
 /**

@@ -209,3 +209,12 @@ describe("useFillMorph while react-dom/server first loads (spec 09 lazy load)", 
     tree.unmount();
   });
 });
+
+describe("useFillMorph's public result", () => {
+  it("is exactly { contours, retarget, error }: forwarded icon attributes stay internal", () => {
+    const results: UseFillMorphResult[] = [];
+    const tree = mount(<Probe icon={<FaHeart color="red" />} results={results} />);
+    expect(Object.keys(results.at(-1) ?? {}).sort()).toEqual(["contours", "error", "retarget"]);
+    tree.unmount();
+  });
+});

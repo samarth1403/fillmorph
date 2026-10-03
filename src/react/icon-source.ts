@@ -22,14 +22,15 @@ export class FillmorphIconInputError extends FillmorphMarkupError {
 
 /**
  * An icon reduced to its markup, to the message of why it has none, or to neither while the
- * renderer an element needs is still loading (spec 09's lazy load). The fields are primitives so
- * hooks can memoize and compare on them: a JSX element is a new object on every render, but the
- * markup it renders to isn't.
+ * renderer an element needs is still loading (spec 09's lazy load). `isElement` marks markup
+ * rendered from an element, whose root `<svg>` attributes `<FillMorph>` forwards (0.2.1). The
+ * fields are primitives so hooks can memoize and compare on them: a JSX element is a new object
+ * on every render, but the markup it renders to isn't.
  */
 export type ResolvedIcon =
-  | { markup: string; invalid: null }
-  | { markup: null; invalid: string }
-  | { markup: null; invalid: null };
+  | { markup: string; invalid: null; isElement: boolean }
+  | { markup: null; invalid: string; isElement: boolean }
+  | { markup: null; invalid: null; isElement: true };
 
 type RenderToStaticMarkup = (element: ReactElement) => string;
 /** What `fillmorph/react` uses from `react-dom/server`. */
@@ -119,16 +120,21 @@ function describeInvalid(icon: unknown): string {
  * rendering the element isn't a bad icon but a bug in it, so it propagates.
  */
 export function resolveIcon(icon: unknown, renderer: IconRendererState): ResolvedIcon {
-  if (typeof icon === "string") return { markup: icon, invalid: null };
+  if (typeof icon === "string") return { markup: icon, invalid: null, isElement: false };
   if (!isValidElement(icon)) {
     return {
       markup: null,
       invalid: `fillmorph/react expects an icon as full SVG markup (a string) or a React element such as \`<FaHeart />\`, but got ${describeInvalid(icon)}.`,
+      isElement: false,
     };
   }
-  if (renderer.status === "ready") return { markup: renderer.render(icon), invalid: null };
-  if (renderer.status === "failed") return { markup: null, invalid: renderer.message };
-  return { markup: null, invalid: null };
+  if (renderer.status === "ready") {
+    return { markup: renderer.render(icon), invalid: null, isElement: true };
+  }
+  if (renderer.status === "failed") {
+    return { markup: null, invalid: renderer.message, isElement: true };
+  }
+  return { markup: null, invalid: null, isElement: true };
 }
 
 /** Whether a resolved icon is waiting for the renderer. */
@@ -165,7 +171,11 @@ export function isSameIcon(
   if (isPendingIcon(aResolved) || isPendingIcon(bResolved)) {
     return isValidElement(a) && isValidElement(b) ? isSameElement(a, b) : a === b;
   }
-  return aResolved.markup === bResolved.markup && aResolved.invalid === bResolved.invalid;
+  return (
+    aResolved.markup === bResolved.markup &&
+    aResolved.invalid === bResolved.invalid &&
+    aResolved.isElement === bResolved.isElement
+  );
 }
 
 /** The rejection for an icon `resolveIcon` found no markup in, carrying its message. */
@@ -196,7 +206,7 @@ function useResolution(icon: unknown, isPresent: boolean): ResolvedIcon | null {
  * never does.
  */
 export function useResolvedIcon(icon: FillMorphIcon): ResolvedIcon {
-  return useResolution(icon, true) ?? { markup: null, invalid: null };
+  return useResolution(icon, true) ?? { markup: null, invalid: null, isElement: true };
 }
 
 /**

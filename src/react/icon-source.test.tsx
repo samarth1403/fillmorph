@@ -26,8 +26,8 @@ afterEach(() => {
 
 describe("resolveIcon", () => {
   it("passes a markup string through untouched, whether or not the renderer is loaded", () => {
-    expect(resolveIcon(SQUARE, IDLE)).toEqual({ markup: SQUARE, invalid: null });
-    expect(resolveIcon(SQUARE, READY)).toEqual({ markup: SQUARE, invalid: null });
+    expect(resolveIcon(SQUARE, IDLE)).toEqual({ markup: SQUARE, invalid: null, isElement: false });
+    expect(resolveIcon(SQUARE, READY)).toEqual({ markup: SQUARE, invalid: null, isElement: false });
   });
 
   it("renders a plain <svg> element to its markup once the renderer is loaded", () => {
@@ -45,14 +45,14 @@ describe("resolveIcon", () => {
   it("leaves an element pending until the renderer is loaded", () => {
     for (const status of ["idle", "loading"] as const) {
       const resolved = resolveIcon(<FaHeart />, { status });
-      expect(resolved).toEqual({ markup: null, invalid: null });
+      expect(resolved).toEqual({ markup: null, invalid: null, isElement: true });
       expect(isPendingIcon(resolved)).toBe(true);
     }
   });
 
   it("rejects an element with the load failure's message if the renderer couldn't load", () => {
     const resolved = resolveIcon(<FaHeart />, { status: "failed", message: "no react-dom" });
-    expect(resolved).toEqual({ markup: null, invalid: "no react-dom" });
+    expect(resolved).toEqual({ markup: null, invalid: "no react-dom", isElement: true });
   });
 
   it("runs function components, forwardRef and context defaults, as React does", () => {

@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+
+import { HeartIcon } from "@heroicons/react/24/solid";
 import {
   advanceMorph,
   type Contour,
@@ -13,12 +15,13 @@ import {
   startMorph,
 } from "fillmorph";
 import { Heart } from "lucide-react";
-import { act, Component, createRef, type ReactNode, StrictMode } from "react";
+import { act, Component, createRef, type ReactElement, type ReactNode, StrictMode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FaCircle, FaHeart, FaRegCircle } from "react-icons/fa6";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import FillMorph, { type FillMorphHandle } from "./fill-morph";
 import { type FillMorphIcon, FillmorphIconInputError, getIconRendererState } from "./icon-source";
+import { readRootSvgAttributes } from "./icon-svg-props";
 import type { FillmorphError } from "./parse-icon-markup";
 import {
   CIRCLE,
@@ -765,5 +768,169 @@ describe("<FillMorph> while react-dom/server first loads (spec 09 lazy load)", (
     tree.render(<FillMorph icon={CIRCLE} springConfig={CONFIG} onError={onError} />);
     runUntilIdle();
     expect(pathData(tree.container)).toBe(dOf(CIRCLE));
+  });
+});
+
+/** Root attributes `<FillMorph>` keeps for itself rather than forwarding from an icon element. */
+const OWNED = ["viewBox", "preserveAspectRatio", "x", "y", "overflow", "id", "xmlns", "version"];
+
+function rootSvg(container: HTMLElement): SVGSVGElement {
+  const svg = container.querySelector("svg");
+  if (svg === null) throw new Error("no <svg> rendered");
+  return svg;
+}
+
+/**
+ * Asserts `svg` carries every root attribute `element` renders to on its own, minus the ones
+ * fillmorph owns, computed from the library's output alone: nothing here knows any library.
+ */
+function expectForwarded(svg: SVGSVGElement, element: ReactElement): void {
+  const attributes = readRootSvgAttributes(renderToStaticMarkup(element)) ?? [];
+  const forwarded = attributes.filter(
+    ([name]) => !OWNED.includes(name) && !name.startsWith("xmlns:"),
+  );
+  expect(forwarded.length).toBeGreaterThan(0);
+  for (const [name, value] of forwarded) {
+    if (name !== "style") {
+      expect([name, svg.getAttribute(name)]).toEqual([name, value]);
+      continue;
+    }
+    for (const declaration of value.split(";").filter(Boolean)) {
+      const [property = "", propertyValue = ""] = declaration.split(":");
+      expect([property, svg.style.getPropertyValue(property)]).toEqual([property, propertyValue]);
+    }
+  }
+}
+
+describe("<FillMorph> forwarding an icon element's root <svg> attributes (0.2.1)", () => {
+  it.each([
+    ["react-icons (color, size)", <FaHeart key="fa" color="red" size={32} className="like" />],
+    [
+      "heroicons (className, aria-*, data-*)",
+      <HeartIcon key="hero" className="size-6 text-red-500" aria-label="Like" data-state="on" />,
+    ],
+  ])("forwards whatever %s renders, with no library-specific code", (_name, element) => {
+    const { container } = track(mount(<FillMorph icon={element} />));
+    const svg = rootSvg(container);
+    expectForwarded(svg, element);
+    // The frame stays fillmorph's.
+    expect(svg.getAttribute("viewBox")).toBe("0 0 100 100");
+    expect(svg.getAttribute("overflow")).toBe("visible");
+    expect(pathData(container)).not.toBe("");
+  });
+
+  it("draws react-icons' color and size the way the icon itself would", () => {
+    const { container } = track(mount(<FillMorph icon={<FaHeart color="red" size={32} />} />));
+    const svg = rootSvg(container);
+    expect(svg.getAttribute("width")).toBe("32");
+    expect(svg.getAttribute("height")).toBe("32");
+    expect(svg.getAttribute("fill")).toBe("currentColor");
+    expect(svg.style.color).toBe("red");
+  });
+
+  it("lets a prop passed to <FillMorph> win over the icon's own value", () => {
+    const { container } = track(
+      mount(<FillMorph icon={<FaHeart color="red" size={32} />} fill="blue" width={48} />),
+    );
+    const svg = rootSvg(container);
+    expect(svg.getAttribute("fill")).toBe("blue");
+    expect(svg.getAttribute("width")).toBe("48");
+    expect(svg.getAttribute("height")).toBe("32");
+  });
+
+  it("combines className and style instead of replacing them, the caller winning shared properties", () => {
+    const { container } = track(
+      mount(
+        <FillMorph
+          icon={<FaHeart className="icon" style={{ opacity: 0.5, color: "red" }} />}
+          className="mine"
+          style={{ color: "blue", margin: "2px" }}
+        />,
+      ),
+    );
+    const svg = rootSvg(container);
+    expect(svg.getAttribute("class")).toBe("icon mine");
+    expect(svg.style.opacity).toBe("0.5");
+    expect(svg.style.color).toBe("blue");
+    expect(svg.style.margin).toBe("2px");
+  });
+
+  it("never forwards the icon's id, so the same icon twice can't duplicate a DOM id", () => {
+    const tree = track(
+      mount(
+        <>
+          <FillMorph icon={<FaHeart id="like" />} />
+          <FillMorph icon={<FaHeart id="like" />} />
+          <FillMorph icon={<FaHeart id="like" />} id="mine" />
+        </>,
+      ),
+    );
+    expect(tree.container.querySelectorAll("#like")).toHaveLength(0);
+    expect(tree.container.querySelectorAll("#mine")).toHaveLength(1);
+  });
+
+  it("doesn't forward anything from markup given as a string", () => {
+    const red =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="red" class="x"><path d="M4 4H20V20H4Z"/></svg>';
+    const svg = rootSvg(track(mount(<FillMorph icon={red} />)).container);
+    expect(svg.getAttribute("fill")).toBeNull();
+    expect(svg.getAttribute("class")).toBeNull();
+  });
+
+  it("snaps to the new icon's attributes the moment it changes, while the shape springs", () => {
+    const tree = track(mount(<FillMorph icon={<FaHeart color="red" />} springConfig={CONFIG} />));
+    runUntilIdle();
+    tree.render(<FillMorph icon={<FaCircle color="blue" size={20} />} springConfig={CONFIG} />);
+    const svg = rootSvg(tree.container);
+    expect(svg.style.color).toBe("blue");
+    expect(svg.getAttribute("width")).toBe("20");
+    nextFrame();
+    expect(pathData(tree.container)).not.toBe(dOf(renderToStaticMarkup(<FaCircle />)));
+    tree.render(<FillMorph icon={SQUARE} springConfig={CONFIG} />);
+    expect(svg.getAttribute("width")).toBeNull();
+    expect(svg.style.color).toBe("");
+  });
+
+  it("keeps the last good icon's attributes when a new icon is rejected", () => {
+    const onError = vi.fn<(error: FillmorphError) => void>();
+    const tree = track(mount(<FillMorph icon={<FaHeart color="red" />} onError={onError} />));
+    tree.render(<FillMorph icon={<Heart color="blue" />} onError={onError} />);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(rootSvg(tree.container).style.color).toBe("red");
+  });
+
+  it("forwards a morphTo element's attributes", () => {
+    const ref = createRef<FillMorphHandle>();
+    const tree = track(mount(<FillMorph ref={ref} icon={SQUARE} springConfig={CONFIG} />));
+    act(() => ref.current?.morphTo(<FaHeart color="red" />));
+    expect(rootSvg(tree.container).style.color).toBe("red");
+  });
+
+  it("controlled mode snaps from icon's attributes to to's halfway", () => {
+    const at = (progress: number) => {
+      const { container } = track(
+        mount(
+          <FillMorph
+            icon={<FaHeart color="red" />}
+            to={<FaCircle color="blue" />}
+            progress={progress}
+          />,
+        ),
+      );
+      return rootSvg(container).style.color;
+    };
+    expect([at(0), at(0.49), at(0.5), at(1)]).toEqual(["red", "red", "blue", "blue"]);
+  });
+});
+
+describe("<FillMorph> forwarded attributes while react-dom/server first loads", () => {
+  it("forwards a first element icon's attributes once it loads, not before", async () => {
+    const load = holdIconRendererLoad();
+    const tree = track(mount(<FillMorph icon={<FaHeart color="red" size={32} />} />));
+    const svg = rootSvg(tree.container);
+    expect(svg.getAttribute("width")).toBeNull();
+    await load.release();
+    expect(svg.getAttribute("width")).toBe("32");
+    expect(svg.style.color).toBe("red");
   });
 });

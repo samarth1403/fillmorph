@@ -5,13 +5,9 @@ import {
   FillmorphParseError,
   parseIcon,
 } from "fillmorph";
-import { useMemo } from "react";
-import {
-  type FillMorphIcon,
-  iconInputError,
-  type ResolvedIcon,
-  useResolvedIcon,
-} from "./icon-source";
+import { useMemo, useState } from "react";
+import { iconInputError, type ResolvedIcon } from "./icon-source";
+import { type IconSvgProps, toIconSvgProps } from "./icon-svg-props";
 
 /**
  * Any of core's three parse-time rejections (spec 02): the errors `<FillMorph>`'s `onError` and
@@ -68,7 +64,27 @@ export function useParsedIcon(icon: ResolvedIcon): IconParse {
   }, [markup, invalid]);
 }
 
-/** `icon`, markup or element, resolved and parsed. See `useParsedIcon` for the memoization. */
-export function useIconParse(icon: FillMorphIcon): IconParse {
-  return useParsedIcon(useResolvedIcon(icon));
+/**
+ * The newest icon that parsed: `icon` itself if `parse` succeeded, else the last one that did.
+ * So a rejected or still-pending icon doesn't change which icon's attributes are shown.
+ */
+export function useLastParsedIcon(icon: ResolvedIcon, parse: IconParse): ResolvedIcon | null {
+  const isParsed = parse.contours !== null;
+  const [last, setLast] = useState<ResolvedIcon | null>(isParsed ? icon : null);
+  if (
+    isParsed &&
+    (last === null || last.markup !== icon.markup || last.isElement !== icon.isElement)
+  ) {
+    setLast(icon);
+  }
+  return isParsed ? icon : last;
+}
+
+/**
+ * The root `<svg>` attributes to forward from `icon` (spec 09, 0.2.1): only for an icon given as
+ * a React element, never for markup given as a string. Memoized on the markup.
+ */
+export function useIconSvgProps(icon: ResolvedIcon | null): IconSvgProps | null {
+  const markup = icon?.isElement === true ? icon.markup : null;
+  return useMemo(() => (markup === null ? null : toIconSvgProps(markup)), [markup]);
 }

@@ -2,7 +2,13 @@ import type { Contour, SpringConfig } from "fillmorph";
 import { createMorphDriver, type MorphDriver } from "fillmorph/dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type FillMorphIcon, isSameIcon, useResolvedIcon, useResolvedSlot } from "./icon-source";
-import { type FillmorphError, useParsedIcon } from "./parse-icon-markup";
+import type { IconSvgProps } from "./icon-svg-props";
+import {
+  type FillmorphError,
+  useIconSvgProps,
+  useLastParsedIcon,
+  useParsedIcon,
+} from "./parse-icon-markup";
 
 /** What `useFillMorph` returns on every render. */
 export type UseFillMorphResult = {
@@ -77,6 +83,20 @@ function useStableConfig(config: SpringConfig | undefined): SpringConfig | undef
  * very first icon, if it's an element, shows nothing. Strings never wait.
  */
 export function useFillMorph(icon: FillMorphIcon, config?: SpringConfig): UseFillMorphResult {
+  const { contours, retarget, error } = useFillMorphWithIconProps(icon, config);
+  return { contours, retarget, error };
+}
+
+/**
+ * `useFillMorph`, plus the root `<svg>` attributes of the icon being morphed to, if it's an
+ * element: what `<FillMorph>` forwards to its own `<svg>` (0.2.1). They switch the moment a new
+ * icon parses (a snap, not animated); a rejected or still-loading icon leaves them as they were.
+ * Internal: not exported from `fillmorph/react`.
+ */
+export function useFillMorphWithIconProps(
+  icon: FillMorphIcon,
+  config?: SpringConfig,
+): UseFillMorphResult & { iconSvgProps: IconSvgProps | null } {
   const resolved = useResolvedIcon(icon);
   // An imperative `retarget` wins until `icon` itself changes; tracking the `icon` it was made
   // under means a later change back to that value doesn't revive a stale override.
@@ -91,6 +111,7 @@ export function useFillMorph(icon: FillMorphIcon, config?: SpringConfig): UseFil
   const target = isCurrentIcon && override !== null ? override : resolved;
 
   const parsed = useParsedIcon(target);
+  const iconSvgProps = useIconSvgProps(useLastParsedIcon(target, parsed));
   const springConfig = useStableConfig(config);
 
   const [emitted, setEmitted] = useState<Contour[] | null>(null);
@@ -130,5 +151,10 @@ export function useFillMorph(icon: FillMorphIcon, config?: SpringConfig): UseFil
     setRequest((current) => ({ icon: current.icon, override: { icon: next } }));
   }, []);
 
-  return { contours: emitted ?? parsed.contours ?? [], retarget, error: parsed.error };
+  return {
+    contours: emitted ?? parsed.contours ?? [],
+    retarget,
+    error: parsed.error,
+    iconSvgProps,
+  };
 }
