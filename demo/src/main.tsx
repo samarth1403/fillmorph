@@ -5,7 +5,6 @@ import "./styles.css";
 import { type ReactElement, type ReactNode, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ALL_ICONS } from "./catalog";
-import { Compare } from "./sections/compare";
 import { GetStarted } from "./sections/get-started";
 import { Hero } from "./sections/hero";
 import { IconWall } from "./sections/icon-wall";
@@ -16,7 +15,7 @@ import { UseCases } from "./sections/use-cases";
 
 /**
  * The demo site (spec 08 #1, §1a, §1b), built with `fillmorph/react`'s `<FillMorph>` throughout:
- * hero, swap vs. morph, comparison, playground, use cases, icon wall, get started. Fonts are bundled locally
+ * hero, swap vs. morph, playground, use cases, icon wall, get started. Fonts are bundled locally
  * (`@fontsource`), so the page makes no external requests.
  */
 
@@ -63,7 +62,6 @@ const Page = (): ReactElement => {
       <main id="top">
         <Hero />
         <SwapVsMorph />
-        <Compare />
         <Section
           id="playground"
           eyebrow="Playground"
@@ -107,12 +105,8 @@ const Page = (): ReactElement => {
           <a className="underline underline-offset-2" href="https://fontawesome.com/license/free">
             Font Awesome Free 6.7.2
           </a>{" "}
-          by Fonticons, Inc., CC BY 4.0. Stroke icon:{" "}
-          <a className="underline underline-offset-2" href="https://lucide.dev/license">
-            Lucide
-          </a>
-          , ISC. React and JavaScript marks: Font Awesome Free brand icons, CC BY 4.0, trademarks of
-          their owners. Fonts: Inter and JetBrains Mono, SIL OFL 1.1.
+          by Fonticons, Inc., CC BY 4.0. React and JavaScript marks: Font Awesome Free brand icons,
+          CC BY 4.0, trademarks of their owners. Fonts: Inter and JetBrains Mono, SIL OFL 1.1.
         </p>
       </footer>
     </div>
