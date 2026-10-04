@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { FillmorphIncompatibleIconError } from "../errors";
+import {
+  FillmorphIncompatibleIconError,
+  FillmorphMarkupError,
+} from "../errors";
 import { validateIconContract } from "./contract";
 import { parseSvgMarkup } from "./markup";
 import {
@@ -81,25 +84,125 @@ describe("validateIconContract - rejects stroke icons", () => {
   });
 
   it("rejects fill: none set through an inline style", () => {
-    const markup = svg(`<path style="fill:none" ${SQUARE}/>`);
+    const markup = svg(
+      `<path style="fill:none" ${SQUARE}/>`,
+      ' viewBox="0 0 24 24" stroke="#000"',
+    );
     expect(() => validate(markup)).toThrow(FillmorphIncompatibleIconError);
     expect(() => validate(markup)).toThrow(
-      /has fill: none, stroke: none \(fill set on the path/,
+      /has fill: none, stroke: #000 \(fill set on the path, stroke inherited from <svg>\)/,
     );
-  });
-
-  it("rejects a Material-style icon for its invisible fill: none bounding-box path (known limitation)", () => {
-    // Material Design icons ship this pattern; the locked rule rejects any rendered fill: none path.
-    const markup = svg(
-      '<path d="M0 0h24v24H0z" fill="none"/><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>',
-    );
-    expect(() => validate(markup)).toThrow(FillmorphIncompatibleIconError);
-    expect(() => validate(markup)).toThrow(/<path> #1 has fill: none/);
   });
 
   it("rejects fill: none inherited from a <g>", () => {
-    expect(() => validate(svg(`<g fill="none"><path ${SQUARE}/></g>`))).toThrow(
-      /inherited from <g>/,
+    expect(() =>
+      validate(svg(`<g fill="none" stroke="red"><path ${SQUARE}/></g>`)),
+    ).toThrow(/inherited from <g>/);
+  });
+
+  // Spec 10 #1: Lucide's `Circle` is a lone `<circle>`, so stage 1 used to report "no <path>".
+  const strokeOnlyShapes: [string, string][] = [
+    ["<circle>", '<circle cx="12" cy="12" r="10"/>'],
+    ["<rect>", '<rect width="18" height="18" x="3" y="3" rx="2"/>'],
+    ["<line>", '<line x1="5" y1="12" x2="19" y2="12"/>'],
+    ["<polygon>", '<polygon points="12 2 22 22 2 22"/>'],
+  ];
+  it.each(strokeOnlyShapes)(
+    "rejects a stroke-only icon made of a %s and no <path> as a stroke icon",
+    (name, body) => {
+      const markup = svg(
+        body,
+        ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"',
+      );
+      expect(() => validate(markup)).toThrow(FillmorphIncompatibleIconError);
+      expect(() => validate(markup)).toThrow(
+        new RegExp(
+          `A ${name} element has fill: none, stroke: currentColor \\(both inherited from <svg>\\) - fillmorph works with filled icons only`,
+        ),
+      );
+    },
+  );
+
+  it("reports a stroke-only <circle> next to filled geometry as an unsupported element", () => {
+    expect(() =>
+      validate(
+        svg(
+          `<path ${SQUARE}/><circle r="4" fill="none" stroke="red"/>`,
+        ),
+      ),
+    ).toThrow(/<circle>.*"object to path"/);
+  });
+});
+
+describe("validateIconContract - elements that draw nothing are skipped (spec 10 #1)", () => {
+  const HEART =
+    'd="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"';
+  const shownIds = (markup: string): (string | undefined)[] =>
+    validate(markup).paths.map((path) => path.element.attributes.get("id"));
+
+  it("accepts a Material Design icon, skipping its invisible fill: none bounding-box path", () => {
+    expect(
+      shownIds(
+        svg(`<path id="box" d="M0 0h24v24H0z" fill="none"/><path id="heart" ${HEART}/>`),
+      ),
+    ).toEqual(["heart"]);
+  });
+
+  it("accepts a Material Design icon as react-icons renders it (stroke color inherited at stroke-width 0)", () => {
+    const markup = svg(
+      `<path id="box" fill="none" d="M0 0h24v24H0z"></path><path id="heart" ${HEART}></path>`,
+      ' stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 24 24"',
+    );
+    expect(shownIds(markup)).toEqual(["heart"]);
+  });
+
+  const hidden: [string, string][] = [
+    ["a display attribute", `<path id="hidden" display="none" ${SQUARE}/>`],
+    ["an inline style", `<path id="hidden" style="display: none" ${SQUARE}/>`],
+    ["a hidden <g>", `<g display="none"><path id="hidden" ${SQUARE}/></g>`],
+  ];
+  it.each(hidden)(
+    "excludes a path hidden with display: none through %s",
+    (_label, body) => {
+      expect(shownIds(svg(`<path id="shown" ${SQUARE}/>${body}`))).toEqual([
+        "shown",
+      ]);
+    },
+  );
+
+  it("skips hidden elements before any other check, so a hidden stroke or <circle> isn't rejected", () => {
+    expect(
+      shownIds(
+        svg(
+          `<path id="shown" ${SQUARE}/><circle display="none" r="4"/><path display="none" fill="none" stroke="red" ${SQUARE}/>`,
+        ),
+      ),
+    ).toEqual(["shown"]);
+  });
+
+  it("still rejects a stroke-only path whose stroke-width is not zero", () => {
+    expect(() =>
+      validate(
+        svg(
+          `<path ${SQUARE}/><path fill="none" ${SQUARE}/>`,
+          ' viewBox="0 0 24 24" stroke="currentColor" stroke-width="0.5"',
+        ),
+      ),
+    ).toThrow(/<path> #2 has fill: none, stroke: currentColor/);
+  });
+
+  it("rejects an icon whose paths all draw nothing as drawing nothing", () => {
+    const markup = svg(
+      `<path fill="none" ${SQUARE}/><path display="none" ${SQUARE}/>`,
+    );
+    expect(() => validate(markup)).toThrow(FillmorphIncompatibleIconError);
+    expect(() => validate(markup)).toThrow(/draws nothing fillmorph can morph/);
+  });
+
+  it("still reports an icon with no <path> and nothing stroked as having no <path>", () => {
+    expect(() => validate(svg('<circle r="4"/>'))).toThrow(FillmorphMarkupError);
+    expect(() => validate(svg('<circle r="4"/>'))).toThrow(
+      /no <path> element/,
     );
   });
 });

@@ -93,6 +93,10 @@ describe("parseSvgMarkup - does not judge content (that is stage 2's job)", () =
     );
     expect(parseSvgMarkup(markup).paths).toHaveLength(1);
   });
+
+  it("succeeds with no <path> at all, so a <circle>-only stroke icon can be diagnosed as one", () => {
+    expect(parseSvgMarkup(svg('<circle r="4"/>')).paths).toEqual([]);
+  });
 });
 
 describe("parseSvgMarkup - effective fill and stroke", () => {
@@ -178,15 +182,6 @@ describe("parseSvgMarkup - rejects markup that isn't well-formed SVG", () => {
   it("throws FillmorphMarkupError when the root element isn't <svg>", () => {
     expect(() => parseSvgMarkup('<html><path d="M0 0"/></html>')).toThrow(
       /root element is <html>/,
-    );
-  });
-
-  it("throws FillmorphMarkupError when there is no <path> at all", () => {
-    expect(() => parseSvgMarkup(svg('<circle r="4"/>'))).toThrow(
-      FillmorphMarkupError,
-    );
-    expect(() => parseSvgMarkup(svg('<circle r="4"/>'))).toThrow(
-      /no <path> element/,
     );
   });
 

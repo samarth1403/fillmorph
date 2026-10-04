@@ -27,7 +27,7 @@ export type ExtractedPath = {
   stroke: ResolvedPaint;
 };
 
-/** Stage 1 output: the document tree plus every `<path>` in it. */
+/** Stage 1 output: the document tree plus every `<path>` in it (possibly none). */
 export type SvgMarkup = {
   root: SvgElement;
   paths: ExtractedPath[];
@@ -35,7 +35,11 @@ export type SvgMarkup = {
   viewBox: ViewBox | undefined;
 };
 
-const PAINT_DEFAULTS = { fill: "black", stroke: "none" } as const;
+const PAINT_DEFAULTS = {
+  fill: "black",
+  stroke: "none",
+  "stroke-width": "1",
+} as const;
 
 const VIEWBOX_NUMBER_PATTERN = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
 
@@ -52,12 +56,12 @@ const PREDEFINED_ENTITIES: Readonly<Record<string, string>> = {
  * Stage 1: parses full SVG markup (`<svg ...>...</svg>`) into an element tree and extracts every
  * `<path>` element with its `d` string and effective fill/stroke.
  *
- * Source-agnostic and content-neutral: it succeeds on any well-formed SVG containing at least one
- * `<path>`, whether or not the icon is morphable. It only reads tags and attributes; it does not
- * touch the DOM, resolve external DTDs, or apply CSS from `<style>` elements.
+ * Source-agnostic and content-neutral: it succeeds on any well-formed SVG, whether or not the icon
+ * is morphable - even one with no `<path>` at all, which stage 2 judges, since a stroke icon made
+ * only of `<circle>`s should be reported as a stroke icon. It only reads tags and attributes; it
+ * does not touch the DOM, resolve external DTDs, or apply CSS from `<style>` elements.
  *
- * @throws FillmorphMarkupError if the markup is not well-formed XML, its root is not `<svg>`, or
- *   it contains no `<path>` element.
+ * @throws FillmorphMarkupError if the markup is not well-formed XML or its root is not `<svg>`.
  */
 export function parseSvgMarkup(markup: string): SvgMarkup {
   if (typeof markup !== "string") {
@@ -87,12 +91,6 @@ export function parseSvgMarkup(markup: string): SvgMarkup {
     for (const child of element.children) visit(child);
   };
   visit(root);
-
-  if (paths.length === 0) {
-    throw new FillmorphMarkupError(
-      "The SVG contains no <path> element. fillmorph reads icon geometry from <path> elements.",
-    );
-  }
   return { root, paths, viewBox: parseViewBox(root.attributes.get("viewBox")) };
 }
 
@@ -155,17 +153,17 @@ export function readPresentationValue(
 }
 
 /**
- * Resolves a paint property the way SVG inheritance does: the nearest element on the path's
- * ancestor chain (the path itself first, the `<svg>` root last) that sets it wins, else SVG's
- * default. On each element an inline `style` declaration beats the presentation attribute, as
- * in CSS. `inherit` defers to the next ancestor.
+ * Resolves an inherited presentation property (`fill`, `stroke`, `stroke-width`) the way SVG
+ * inheritance does: the nearest element on the ancestor chain (the element itself first, the
+ * `<svg>` root last) that sets it wins, else SVG's default. On each element an inline `style`
+ * declaration beats the presentation attribute, as in CSS. `inherit` defers to the next ancestor.
  */
-function resolvePaint(
-  path: SvgElement,
-  property: "fill" | "stroke",
+export function resolvePaint(
+  start: SvgElement,
+  property: keyof typeof PAINT_DEFAULTS,
 ): ResolvedPaint {
   for (
-    let element: SvgElement | undefined = path;
+    let element: SvgElement | undefined = start;
     element;
     element = element.parent
   ) {

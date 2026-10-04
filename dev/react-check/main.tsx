@@ -1,11 +1,13 @@
 import { HeartIcon, StarIcon } from "@heroicons/react/24/solid";
+import { parseIcon, type SpringConfig } from "fillmorph";
+import { createMorphDriver } from "fillmorph/dom";
 import {
   FillMorph,
   type FillMorphHandle,
   type FillMorphIcon,
   type FillmorphError,
 } from "fillmorph/react";
-import { Heart as LucideHeart } from "lucide-react";
+import { Circle as LucideCircle, Heart as LucideHeart } from "lucide-react";
 import { type ReactElement, type RefObject, StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { IconBaseProps } from "react-icons";
@@ -21,6 +23,7 @@ import {
   FaRegStar,
   FaUser,
 } from "react-icons/fa6";
+import { MdFavorite } from "react-icons/md";
 import type { FixtureName } from "../../harness/fixtures.ts";
 import { REFERENCE_PAIRS } from "../../harness/pairs.ts";
 import { FIXTURE_LIST, FIXTURES } from "./fixtures.ts";
@@ -356,6 +359,146 @@ const ElementSection = (): ReactElement => {
   );
 };
 
+const NON_FINITE_PROGRESS: [string, number][] = [
+  ["0", 0],
+  ["NaN (0 / 0)", 0 / 0],
+  ["Infinity", Number.POSITIVE_INFINITY],
+  ["1", 1],
+  ["-Infinity", Number.NEGATIVE_INFINITY],
+];
+const PARTIAL_SPRING = { stiffness: 2000 } as SpringConfig;
+
+/** What `createMorphDriver` itself throws for `config`: the error the component must match. */
+function driverErrorFor(config: SpringConfig): string {
+  const square = '<svg viewBox="0 0 10 10"><path d="M0 0H10V10H0Z"/></svg>';
+  const contours = parseIcon(square).contours;
+  try {
+    createMorphDriver(contours, contours, config).stop();
+    return "(no error)";
+  } catch (error) {
+    return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  }
+}
+
+/**
+ * Mounts a `<FillMorph>` with a partial `springConfig` in a root of its own, so the error it
+ * throws (from an effect, where only an error boundary or the root sees it) is shown here
+ * instead of unmounting the whole page.
+ */
+const PartialSpringCheck = (): ReactElement => {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [caught, setCaught] = useState<string | null>(null);
+  useEffect(() => {
+    const host = hostRef.current;
+    if (host === null) return;
+    // A fresh child each time: StrictMode re-runs this effect before the deferred unmount below.
+    const mountPoint = host.appendChild(document.createElement("div"));
+    const root = createRoot(mountPoint, {
+      onUncaughtError: (error) =>
+        setCaught(error instanceof Error ? `${error.name}: ${error.message}` : String(error)),
+    });
+    root.render(
+      <FillMorph
+        icon={FIXTURES["fa-solid-heart"]}
+        springConfig={PARTIAL_SPRING}
+        width={80}
+        height={80}
+      />,
+    );
+    return () => {
+      window.setTimeout(() => {
+        root.unmount();
+        mountPoint.remove();
+      });
+    };
+  }, []);
+  const expected = driverErrorFor(PARTIAL_SPRING);
+  return (
+    <>
+      <div ref={hostRef} />
+      <p>
+        <code>{"<FillMorph springConfig={{ stiffness: 2000 }}>"}</code> threw:
+      </p>
+      <p className="error">{caught ?? "(nothing yet - this is the bug)"}</p>
+      <p>
+        <code>createMorphDriver(…, {"{ stiffness: 2000 }"})</code> throws:
+      </p>
+      <p className="error">{expected}</p>
+      <p>{caught === expected ? "✓ identical" : "✗ different"}</p>
+    </>
+  );
+};
+
+/** Spec 10's by-eye checks (0.2.2): non-finite controlled progress, partial springConfig, MD icons. */
+const BugFixSection = (): ReactElement => {
+  const [progress, setProgress] = useState(0);
+  const [mdError, setMdError] = useState<string | null>(null);
+  const [lucideError, setLucideError] = useState<string | null>(null);
+  return (
+    <section>
+      <h2>Bug fixes (spec 10, 0.2.2)</h2>
+      <h3>Non-finite controlled progress</h3>
+      <p>
+        Regular heart → solid heart. Each button sets <code>progress</code> directly. Look for: NaN
+        draws the same as 0, Infinity the same as 1, -Infinity the same as 0, and the page never
+        goes blank (in 0.2.1 these unmounted the whole tree).
+      </p>
+      <FillMorph
+        icon={FIXTURES["fa-regular-heart"]}
+        to={FIXTURES["fa-solid-heart"]}
+        progress={progress}
+        width={SIZE}
+        height={SIZE}
+        fill="currentColor"
+        aria-label="Non-finite progress check"
+      />
+      <div className="buttons">
+        {NON_FINITE_PROGRESS.map(([text, value]) => (
+          <button
+            key={text}
+            type="button"
+            className={Object.is(progress, value) ? "active" : undefined}
+            onClick={() => setProgress(value)}
+          >
+            progress = {text}
+          </button>
+        ))}
+      </div>
+      <h3>Partial springConfig</h3>
+      <p>
+        Look for: the component's error matches the driver's word for word (in 0.2.1 it threw
+        nothing and silently used the default spring).
+      </p>
+      <PartialSpringCheck />
+      <h3>Material Design and stroke-only shapes</h3>
+      <p>
+        Left: react-icons' <code>{"<MdFavorite />"}</code>, which 0.2.1 rejected for its invisible
+        bounding-box path; it should draw a heart. Right: lucide-react's <code>{"<Circle />"}</code>
+        , which should report a stroke/outline error, not "no &lt;path&gt;".
+      </p>
+      <div className="buttons">
+        <FillMorph
+          icon={<MdFavorite />}
+          onError={(e: FillmorphError) => setMdError(`${e.name}: ${e.message}`)}
+          width={120}
+          height={120}
+          fill="crimson"
+          aria-label="MdFavorite"
+        />
+        <FillMorph
+          icon={<LucideCircle />}
+          onError={(e: FillmorphError) => setLucideError(`${e.name}: ${e.message}`)}
+          width={120}
+          height={120}
+          aria-label="Lucide Circle"
+        />
+      </div>
+      {mdError !== null ? <p className="error">MdFavorite: {mdError}</p> : null}
+      <p className="error">Lucide Circle: {lucideError ?? "(no error yet)"}</p>
+    </section>
+  );
+};
+
 const App = (): ReactElement => {
   const controlledRef = useRef<FillMorphHandle>(null);
   return (
@@ -364,6 +507,7 @@ const App = (): ReactElement => {
       <ControlledSection controlledRef={controlledRef} />
       <ImperativeSection controlledRef={controlledRef} />
       <ElementSection />
+      <BugFixSection />
     </>
   );
 };

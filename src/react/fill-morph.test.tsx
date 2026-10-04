@@ -14,10 +14,12 @@ import {
   type SpringConfig,
   startMorph,
 } from "fillmorph";
-import { Heart } from "lucide-react";
+import { createMorphDriver } from "fillmorph/dom";
+import { Circle, Heart } from "lucide-react";
 import { act, Component, createRef, type ReactElement, type ReactNode, StrictMode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FaCircle, FaHeart, FaRegCircle } from "react-icons/fa6";
+import { MdFavorite } from "react-icons/md";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import FillMorph, { type FillMorphHandle } from "./fill-morph";
 import { type FillMorphIcon, FillmorphIconInputError, getIconRendererState } from "./icon-source";
@@ -91,15 +93,33 @@ afterEach(async () => {
   if (getIconRendererState().status !== "ready") await preloadIconRenderer();
 });
 
-/** Records what an error boundary caught, so a render-time throw can be asserted. */
-class Boundary extends Component<{ children: ReactNode }, { error: unknown }> {
+/**
+ * Records what an error boundary caught, so a render-time throw can be asserted; `onCatch` hands
+ * over the error itself.
+ */
+class Boundary extends Component<
+  { children: ReactNode; onCatch?: (error: unknown) => void },
+  { error: unknown }
+> {
   override state: { error: unknown } = { error: null };
   static getDerivedStateFromError(error: unknown): { error: unknown } {
     return { error };
   }
+  override componentDidCatch(error: unknown): void {
+    this.props.onCatch?.(error);
+  }
   override render(): ReactNode {
     return this.state.error === null ? this.props.children : <p>caught</p>;
   }
+}
+
+function captureError(run: () => unknown): unknown {
+  try {
+    run();
+  } catch (error) {
+    return error;
+  }
+  return null;
 }
 
 describe("<FillMorph> rendering", () => {
@@ -433,6 +453,28 @@ describe("<FillMorph> controlled mode", () => {
     expect(at(-0.4)).toBe(at(0));
   });
 
+  it("draws NaN as 0 and clamps ±Infinity, without throwing (spec 10 #2)", () => {
+    const onError = vi.fn<(error: FillmorphError) => void>();
+    const at = (progress: number) =>
+      pathData(
+        track(mount(<FillMorph icon={RING} to={SQUARE} progress={progress} onError={onError} />))
+          .container,
+      );
+    expect(at(Number.NaN)).toBe(at(0));
+    expect(at(Number.POSITIVE_INFINITY)).toBe(at(1));
+    expect(at(Number.NEGATIVE_INFINITY)).toBe(at(0));
+    expect(at(0)).not.toBe(at(1));
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("keeps drawing when a live progress turns NaN mid-scroll, e.g. 0 / 0", () => {
+    const tree = track(mount(<FillMorph icon={RING} to={SQUARE} progress={0.5} />));
+    tree.render(<FillMorph icon={RING} to={SQUARE} progress={0 / 0} />);
+    expect(pathData(tree.container)).toBe(
+      renderContours(interpolate(contoursOf(RING), contoursOf(SQUARE), 0)),
+    );
+  });
+
   it("warns, and stays controlled, if progress is dropped later", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const tree = track(mount(<FillMorph icon={SQUARE} to={CIRCLE} progress={0.5} />));
@@ -512,6 +554,34 @@ describe("<FillMorph> errors", () => {
     );
     expect(tree.container.textContent).toBe("caught");
   });
+
+  // Spec 10 #3: a partial config used to fall back to the default spring silently.
+  const invalidConfigs: [string, Partial<SpringConfig>][] = [
+    ["a partial springConfig", { stiffness: 2000 }],
+    ["an out-of-range springConfig", { stiffness: -1, damping: 26, mass: 1 }],
+    ["an empty springConfig", {}],
+  ];
+  it.each(invalidConfigs)(
+    "rejects %s with the same RangeError as createMorphDriver",
+    (_label, config) => {
+      const expected = captureError(() =>
+        createMorphDriver(contoursOf(SQUARE), contoursOf(SQUARE), config as SpringConfig),
+      );
+      expect(expected).toBeInstanceOf(RangeError);
+
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      let caught: unknown = null;
+      track(
+        mount(
+          <Boundary onCatch={(error) => (caught = error)}>
+            <FillMorph icon={SQUARE} springConfig={config as SpringConfig} />
+          </Boundary>,
+        ),
+      );
+      expect(caught).toBeInstanceOf(RangeError);
+      expect((caught as RangeError).message).toBe((expected as RangeError).message);
+    },
+  );
 
   it("controlled mode reports a bad `to` and keeps drawing the last good pair", () => {
     const onError = vi.fn<(error: FillmorphError) => void>();
@@ -596,6 +666,25 @@ describe("<FillMorph> with icon elements (spec 09)", () => {
     );
     expect(pathData(fromElements.container)).toBe(pathData(fromStrings.container));
     expect(frames.pendingCount()).toBe(0);
+  });
+
+  it("draws Material Design's <MdFavorite />, skipping its invisible bounding-box path (spec 10 #1)", () => {
+    const onError = vi.fn<(error: FillmorphError) => void>();
+    const tree = track(mount(<FillMorph icon={<MdFavorite />} onError={onError} />));
+    expect(onError).not.toHaveBeenCalled();
+    const heartOnly = renderToStaticMarkup(<MdFavorite />).replace(
+      /<path fill="none" d="M0 0h24v24H0z"><\/path>/,
+      "",
+    );
+    expect(heartOnly).not.toBe(renderToStaticMarkup(<MdFavorite />));
+    expect(pathData(tree.container)).toBe(dOf(heartOnly));
+  });
+
+  it("rejects lucide-react's <Circle /> (no <path>) as a stroke icon (spec 10 #1)", () => {
+    const onError = vi.fn<(error: FillmorphError) => void>();
+    track(mount(<FillMorph icon={<Circle />} onError={onError} />));
+    expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(FillmorphIncompatibleIconError);
+    expect(onError.mock.calls[0]?.[0].message).toMatch(/<circle> element has fill: none/);
   });
 
   it("still rejects a stroke icon set's element (lucide-react), with the error its markup gets", () => {

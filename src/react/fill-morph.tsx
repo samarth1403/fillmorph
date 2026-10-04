@@ -65,6 +65,7 @@ export type FillMorphProps = FillMorphSvgProps &
         /**
          * Controlled mode: how far from `icon` (0) to `to` (1) to draw. Clamped to [0, 1], since
          * the geometry can't extrapolate: past 1, a collapsing hole would turn inside out.
+         * `NaN` draws as 0, and ±Infinity clamps to 1 or 0.
          */
         progress: number;
         /** Controlled mode: the icon at `progress` 1, as markup or an element like `icon`. */
@@ -170,6 +171,15 @@ const UncontrolledFillMorph = ({
   return <MorphSvg contours={contours} svgProps={svgProps} iconSvgProps={iconSvgProps} />;
 };
 
+/**
+ * Controlled `progress` into [0, 1] (spec 10 #2). `NaN` (a scroll handler's `0 / 0`) draws `icon`,
+ * as 0 does, and ±Infinity clamps like any other out-of-range value, so no caller-computed value
+ * reaches `interpolate`'s `RangeError`, which `onError` can't catch and would unmount the tree.
+ */
+function clampProgress(progress: number): number {
+  return Number.isNaN(progress) ? 0 : Math.min(1, Math.max(0, progress));
+}
+
 const ControlledFillMorph = ({
   icon,
   to,
@@ -199,8 +209,7 @@ const ControlledFillMorph = ({
   useSurfacedError(fromParsed.error, onError);
   useSurfacedError(toParsed.error, onError);
 
-  // Non-finite progress is left for `interpolate` to reject rather than clamped into range.
-  const clamped = Number.isFinite(progress) ? Math.min(1, Math.max(0, progress)) : progress;
+  const clamped = clampProgress(progress);
   const contours = useMemo(
     () => (from !== null && target !== null ? interpolate(from, target, clamped) : (from ?? [])),
     [from, target, clamped],

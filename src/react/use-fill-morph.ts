@@ -46,17 +46,20 @@ function disposeDriver(live: LiveDriver): void {
 /**
  * `springConfig` by value, so a caller passing a fresh object literal every render doesn't make
  * the driver look reconfigured every render.
+ *
+ * Only an omitted config means the driver's default. A partial one (`{ stiffness: 2000 }`, which
+ * TypeScript rejects but plain JavaScript doesn't) is passed through as given, so the driver
+ * rejects it with the same `RangeError` as `createMorphDriver` called directly (spec 10 #3),
+ * instead of silently falling back to the default spring.
  */
 function useStableConfig(config: SpringConfig | undefined): SpringConfig | undefined {
+  const isGiven = config !== undefined;
   const stiffness = config?.stiffness;
   const damping = config?.damping;
   const mass = config?.mass;
   return useMemo(
-    () =>
-      stiffness === undefined || damping === undefined || mass === undefined
-        ? undefined
-        : { stiffness, damping, mass },
-    [stiffness, damping, mass],
+    () => (isGiven ? ({ stiffness, damping, mass } as SpringConfig) : undefined),
+    [isGiven, stiffness, damping, mass],
   );
 }
 

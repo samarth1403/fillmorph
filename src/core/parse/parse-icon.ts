@@ -52,6 +52,9 @@ const DEGENERATE_AREA_RATIO = 1e-9;
  * winding and start point (see `Contour`). Contours are returned in document order, with ids `"c0"`, `"c1"`, … in that order
  * and each non-outer contour's `parentId` pointing at its innermost container.
  *
+ * Elements that draw nothing - `display: none`, or `fill: none` with no visible stroke (such as
+ * Material Design's invisible bounding-box path) - are skipped entirely, contributing no geometry.
+ *
  * @throws FillmorphMarkupError if the markup is not a well-formed SVG with at least one `<path>`.
  * @throws FillmorphIncompatibleIconError if the icon is outside the compatibility contract.
  * @throws FillmorphParseError if a path's `d` is malformed, open, or degenerate.

@@ -6,7 +6,9 @@ export default defineConfig({
     "dom/index": "src/dom/index.ts",
     "react/index": "src/react/index.ts",
   },
-  format: ["esm"],
+  // ESM (`.js`) plus CommonJS (`.cjs`) for `require()` consumers (spec 10 #4). Each subpath
+  // `require`s its siblings through the package's own exports, so the CJS build never loads ESM.
+  format: ["esm", "cjs"],
   target: "es2022",
   outDir: "dist",
   clean: true,

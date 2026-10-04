@@ -1,10 +1,14 @@
-import { FillmorphIncompatibleIconError } from "../errors";
+import {
+  FillmorphIncompatibleIconError,
+  FillmorphMarkupError,
+} from "../errors";
 import type { ViewBox } from "../icon";
 import {
   type ExtractedPath,
   type PresentationValue,
   type ResolvedPaint,
   readPresentationValue,
+  resolvePaint,
   type SvgElement,
   type SvgMarkup,
 } from "./markup";
@@ -30,6 +34,21 @@ const NON_RENDERING_ELEMENTS = new Set([
 ]);
 
 const SHAPE_REFERENCE_PROPERTIES = ["mask", "clip-path"] as const;
+
+/** Elements that draw with `fill`/`stroke` alone, so their paint says whether they draw at all. */
+const GEOMETRY_ELEMENTS = new Set([
+  "path",
+  "circle",
+  "ellipse",
+  "rect",
+  "line",
+  "polyline",
+  "polygon",
+]);
+
+const STROKE_ICON_ADVICE =
+  "fillmorph works with filled icons only. This looks like a stroke/outline icon (as in Lucide " +
+  "or Tabler); use a filled icon instead.";
 
 /** A root `width`/`height` attribute usable as a user-unit size: a plain number, optionally `px`. */
 const USER_UNIT_LENGTH_PATTERN =
@@ -64,28 +83,49 @@ export type IconContract = {
  *   still styles the paths outside it.
  *
  * @throws FillmorphIncompatibleIconError naming the first mismatch found.
+ * @throws FillmorphMarkupError if the SVG has no `<path>` at all and isn't a stroke icon.
  */
 export function validateIconContract(markup: SvgMarkup): IconContract {
-  const renderedElements = new Set<SvgElement>();
-  const problems: string[] = [];
-  collectRendered(markup.root, true, renderedElements, problems);
+  const tree: RenderedTree = {
+    elements: new Set(),
+    problems: [],
+    strokeOnlyShape: undefined,
+    hasFilledShape: false,
+  };
+  collectRendered(markup.root, true, tree);
 
+  // Elements that draw nothing (`display: none`, or no fill and no visible stroke) were skipped
+  // by `collectRendered` (spec 10 #1), so Material Design's invisible bounding-box
+  // `<path d="M0 0h24v24H0z" fill="none"/>` is no evidence of anything. A `fill: none` path left
+  // here draws a visible stroke: a stroke icon, or a filled icon with a stroked outline that
+  // fillmorph would silently drop - rejected either way.
   const renderedPaths = markup.paths.filter((path) =>
-    renderedElements.has(path.element),
+    tree.elements.has(path.element),
   );
-
-  // Deliberately literal, per spec 02: *any* rendered path with fill: none rejects the icon. So
-  // Material Design icons, which carry an invisible `<path d="M0 0h24v24H0z" fill="none"/>`
-  // bounding-box path next to their real filled geometry, are rejected too. A known limitation
-  // of the locked contract, not something to special-case around.
   for (const path of renderedPaths) {
-    if (path.fill.value.toLowerCase() === "none") {
+    if (isNone(path.fill.value)) {
       throw new FillmorphIncompatibleIconError(
         `${describePath(path)} has fill: none, stroke: ${path.stroke.value} ` +
-          `(${describeSources(path.fill, path.stroke)}) - fillmorph works with filled icons only. ` +
-          "This looks like a stroke/outline icon (as in Lucide or Tabler); use a filled icon instead.",
+          `(${describeSources(path.element, path.fill, path.stroke)}) - ${STROKE_ICON_ADVICE}`,
       );
     }
+  }
+  // A stroke-only non-path shape (Lucide's `Circle` is only a `<circle>`) is the same diagnosis
+  // when nothing in the icon is filled. Next to filled geometry it's just an unsupported element,
+  // reported below like any other.
+  const strokeOnly = tree.strokeOnlyShape;
+  if (strokeOnly !== undefined && !tree.hasFilledShape) {
+    throw new FillmorphIncompatibleIconError(
+      `A <${strokeOnly.element.name}> element has fill: none, stroke: ${strokeOnly.stroke.value} ` +
+        `(${describeSources(strokeOnly.element, strokeOnly.fill, strokeOnly.stroke)}) - ${STROKE_ICON_ADVICE}`,
+    );
+  }
+
+  // Judged here rather than by stage 1, so the stroke diagnosis above wins for a path-less icon.
+  if (markup.paths.length === 0) {
+    throw new FillmorphMarkupError(
+      "The SVG contains no <path> element. fillmorph reads icon geometry from <path> elements.",
+    );
   }
 
   if (findElement(markup.root, isStyleElement)) {
@@ -95,7 +135,7 @@ export function validateIconContract(markup: SvgMarkup): IconContract {
     );
   }
 
-  const firstProblem = problems[0];
+  const firstProblem = tree.problems[0];
   if (firstProblem !== undefined)
     throw new FillmorphIncompatibleIconError(firstProblem);
 
@@ -121,8 +161,9 @@ export function validateIconContract(markup: SvgMarkup): IconContract {
 
   if (renderedPaths.length === 0) {
     throw new FillmorphIncompatibleIconError(
-      "The SVG's <path> elements are all inside non-rendering containers (such as <defs>), so " +
-        "the icon draws nothing fillmorph can morph.",
+      "None of the SVG's <path> elements draws anything: each is inside a non-rendering " +
+        "container (such as <defs>), hidden with display: none, or has neither a fill nor a " +
+        "visible stroke. The icon draws nothing fillmorph can morph.",
     );
   }
   return { paths: renderedPaths, viewBox: resolveViewBox(markup) };
@@ -201,18 +242,56 @@ function parseUserUnitLength(raw: string | undefined): number | undefined {
   return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
+/** A geometry element's resolved paint, for the stroke-icon diagnosis. */
+type ShapePaint = {
+  element: SvgElement;
+  fill: ResolvedPaint;
+  stroke: ResolvedPaint;
+};
+
+/** What `collectRendered` learns from walking the rendered tree. */
+type RenderedTree = {
+  /** Elements that render and draw something, `<path>`s included. */
+  elements: Set<SvgElement>;
+  problems: string[];
+  /** The first non-`<path>` shape that draws only a stroke (`fill: none`, visible stroke). */
+  strokeOnlyShape: ShapePaint | undefined;
+  /** Whether any drawn shape (`<path>` or not) has a fill. */
+  hasFilledShape: boolean;
+};
+
+/**
+ * Collects the elements that render and draw something, skipping - before any other check, so
+ * they're evidence of nothing - every element that draws nothing (spec 10 #1):
+ * - `display: none`, with its whole subtree;
+ * - a geometry element with `fill: none` and no visible stroke.
+ */
 function collectRendered(
   element: SvgElement,
   isRoot: boolean,
-  rendered: Set<SvgElement>,
-  problems: string[],
+  tree: RenderedTree,
 ): void {
   if (
     NON_RENDERING_ELEMENTS.has(element.name) ||
     isForeignNamespace(element.name)
   )
     return;
+  if (isNone(readPresentationValue(element, "display")?.value)) return;
 
+  if (GEOMETRY_ELEMENTS.has(element.name)) {
+    const paint: ShapePaint = {
+      element,
+      fill: resolvePaint(element, "fill"),
+      stroke: resolvePaint(element, "stroke"),
+    };
+    // A `<line>` has no interior, so its fill never draws.
+    const isFilled = element.name !== "line" && !isNone(paint.fill.value);
+    if (!isFilled && !hasVisibleStroke(element, paint.stroke)) return;
+    if (isFilled) tree.hasFilledShape = true;
+    else if (element.name !== "path") tree.strokeOnlyShape ??= paint;
+  }
+
+  const { problems } = tree;
   const isSupported =
     element.name === "g" ||
     element.name === "path" ||
@@ -263,9 +342,22 @@ function collectRendered(
     }
   }
 
-  rendered.add(element);
-  for (const child of element.children)
-    collectRendered(child, false, rendered, problems);
+  tree.elements.add(element);
+  for (const child of element.children) collectRendered(child, false, tree);
+}
+
+/**
+ * Whether a stroke actually paints: a color other than `none`, at a width other than 0.
+ * react-icons renders `stroke="currentColor" stroke-width="0"` on every `<svg>` root, so a
+ * colour alone isn't enough.
+ */
+function hasVisibleStroke(element: SvgElement, stroke: ResolvedPaint): boolean {
+  if (isNone(stroke.value)) return false;
+  return Number.parseFloat(resolvePaint(element, "stroke-width").value) !== 0;
+}
+
+function isNone(value: string | undefined): boolean {
+  return value?.toLowerCase() === "none";
 }
 
 /** Editor metadata such as `sodipodi:namedview` or `rdf:RDF` lives in a foreign namespace. */
@@ -304,12 +396,16 @@ export function describePath(path: ExtractedPath): string {
   return `<path> #${path.index + 1}${id === undefined ? "" : ` (id="${id}")`}`;
 }
 
-function describeSources(fill: ResolvedPaint, stroke: ResolvedPaint): string {
+function describeSources(
+  element: SvgElement,
+  fill: ResolvedPaint,
+  stroke: ResolvedPaint,
+): string {
   const describe = (paint: ResolvedPaint): string =>
     paint.source === undefined
       ? "SVG default"
-      : paint.source.name === "path"
-        ? "set on the path"
+      : paint.source === element
+        ? `set on the ${element.name === "path" ? "path" : `<${element.name}>`}`
         : `inherited from <${paint.source.name}>`;
   const fillSource = describe(fill);
   const strokeSource = describe(stroke);

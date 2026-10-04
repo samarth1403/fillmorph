@@ -43,7 +43,7 @@ icon set) - fillmorph doesn't ship a built-in icon library.
 4. 🎛️ [Choose How It Moves](#spring-feel)
 5. 📚 [API Reference](#api-reference)
 6. 🧾 [Icon Requirements](#icon-requirements)
-7. ⚠️ [Known Limitation](#known-limitation)
+7. ⚠️ [Known Limitations](#known-limitation)
 8. 📄 [License](#license)
 
 ## <a name="works-on">✨ What It Works On</a>
@@ -185,9 +185,9 @@ slightly with the bounce instead.
 | Prop           | Type                              | Notes                                                                                |
 | -------------- | --------------------------------- | ------------------------------------------------------------------------------------ |
 | `icon`         | `string \| ReactElement`         | Full SVG markup, or an icon element like `<FaHeart />`. Changing it morphs to it.    |
-| `springConfig` | `{ stiffness, damping, mass }`    | Optional. Defaults to `{ stiffness: 170, damping: 26, mass: 1 }`.                    |
+| `springConfig` | `{ stiffness, damping, mass }`    | Optional, all three or none. Defaults to `{ stiffness: 170, damping: 26, mass: 1 }`. |
 | `onError`      | `(error: FillmorphError) => void` | Optional. Gets parse rejections; without it they're thrown for an error boundary.    |
-| `progress`     | `number`                          | Controlled mode: draw `icon` → `to` at this progress (clamped to 0–1). No animation. |
+| `progress`     | `number`                          | Controlled mode: draw `icon` → `to` at this progress (clamped to 0–1; `NaN` is 0).   |
 | `to`           | `string \| ReactElement`         | Controlled mode only: the icon at `progress` 1.                                      |
 | `ref`          | `{ morphTo(icon) }`               | Imperative: morph to an icon without changing the `icon` prop (uncontrolled only).   |
 
@@ -246,7 +246,10 @@ See each export's TSDoc for the details.
 
 fillmorph morphs icons that are **filled shapes drawn with `<path>`**:
 
-- 🎨 **Filled, not stroked.** A path whose effective `fill` is `none` (a stroke icon) is rejected.
+- 🎨 **Filled, not stroked.** A shape that draws only a stroke (effective `fill: none` with a
+  visible stroke) is rejected as a stroke icon. Elements that draw nothing at all -
+  `display="none"`, or `fill="none"` with no visible stroke, like Material Design's invisible
+  bounding-box path - are ignored.
 - 🔒 **Closed paths** only, with a `viewBox` (or plain numeric `width` and `height`).
 - 🕳️ **Cutouts nested one level deep:** an outline, cutouts in it, and shapes inside those
   cutouts. Deeper nesting parses but isn't guaranteed to morph well.
@@ -257,7 +260,9 @@ Anything outside this is a parse-time error naming the problem, never a silent b
 Most of Font Awesome Free's solid and regular icons fit as they are: 365 of the 379 we
 tried (the rest nest too deeply, or have a zero-area subpath).
 
-## <a name="known-limitation">⚠️ Known Limitation: Complex and Highly Concave Outlines</a>
+## <a name="known-limitation">⚠️ Known Limitations</a>
+
+### Complex and highly concave outlines
 
 Morphs between very complex or highly concave icon outlines can show geometry artifacts
 mid-morph: an outline briefly crossing itself, or a hole briefly poking outside its shape.
@@ -274,6 +279,16 @@ other icons.
 The 164 icons in the demo are verified clean: every ordered pair among them (26,732
 morphs) passes every check. To check your own icon set the same way, run
 `pnpm harness --vet-icons <folder>` from a clone of this repository.
+
+### A few two-tone Material Design icons draw a wrong cutout
+
+These 8 two-tone icons from `react-icons/md` are accepted but draw incorrectly, instead of
+being rejected: `MdSignalWifi1Bar`, `MdSignalWifi1BarLock`, `MdSignalWifi2Bar`,
+`MdSignalWifi2BarLock`, `MdSignalWifi3Bar`, `MdSignalWifi3BarLock`, `MdWifiCalling1` and
+`MdWifiCalling2`. Each draws a solid shape on top of a faded copy of the full icon, as two
+separate overlapping paths. fillmorph's hole detection doesn't yet treat separate paths as
+layered on top of each other, so it cuts the solid shape out as a hole. This will be fixed
+by the planned hole-detection and `fill-rule` work.
 
 ## <a name="license">📄 License</a>
 

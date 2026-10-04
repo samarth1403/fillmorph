@@ -1,7 +1,8 @@
 /**
  * Thrown when the input is not a well-formed SVG document: malformed XML, a root element other
- * than `<svg>`, or no `<path>` element anywhere in it. Raised by markup parsing (stage 1), before
- * any judgement about whether the icon's content is morphable.
+ * than `<svg>`, or no `<path>` element anywhere in it. Raised before any other judgement about
+ * whether the icon's content is morphable, except one: an icon with no `<path>` that draws only
+ * strokes (e.g. a `<circle>` outline) gets `FillmorphIncompatibleIconError` instead.
  */
 export class FillmorphMarkupError extends Error {
   override name = "FillmorphMarkupError";
