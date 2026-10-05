@@ -1,6 +1,6 @@
 {
   "name": "fillmorph",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Morph filled SVG icons into each other, holes and all, with real spring physics.",
   "keywords": [
     "svg",
@@ -29,6 +29,18 @@
   "type": "module",
   "packageManager": "pnpm@11.9.0",
   "sideEffects": false,
+  "main": "./dist/core/index.cjs",
+  "types": "./dist/core/index.d.cts",
+  "typesVersions": {
+    "*": {
+      "dom": [
+        "./dist/dom/index.d.cts"
+      ],
+      "react": [
+        "./dist/react/index.d.cts"
+      ]
+    }
+  },
   "exports": {
     ".": {
       "import": {

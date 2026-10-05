@@ -16,7 +16,9 @@ export type Point = { x: number; y: number };
  *   screen (negative shoelace area in SVG's y-down coordinates); holes run clockwise.
  * - `points[0]` is the topmost point (smallest y), ties broken by leftmost (smallest x).
  * - `parentId` is `null` exactly when `depth` is 0; otherwise it names a contour in the same
- *   result whose `depth` is one less.
+ *   result whose `depth` is one less and whose `isHole` is the opposite.
+ * - `isHole` is how a browser fills the source (spec 11): it follows each `<path>`'s `fill-rule`
+ *   and winding, and one `<path>` never cuts a hole in another.
  */
 export type Contour = {
   /**
@@ -30,4 +32,11 @@ export type Contour = {
   isHole: boolean;
   /** Nesting depth: 0 = outermost, 1 = a hole in it, 2 = a shape inside that hole. */
   depth: number;
+  /**
+   * How opaque this contour's fill draws, 0–1 (spec 11): a two-tone icon's faded layer has, say,
+   * 0.3. Absent means fully opaque (1), which is how `parseIcon` and `interpolate` leave every
+   * opaque contour. A hole draws in its parent's layer (see `renderLayers`), so only a filled
+   * contour's value is visible.
+   */
+  opacity?: number;
 };

@@ -16,6 +16,9 @@ export type ResolvedPaint = {
   source: SvgElement | undefined;
 };
 
+/** How a path decides which regions its subpaths fill (SVG's `fill-rule`). */
+export type FillRule = "nonzero" | "evenodd";
+
 /** A `<path>` element found by stage 1, with its effective fill and stroke already resolved. */
 export type ExtractedPath = {
   element: SvgElement;
@@ -25,6 +28,10 @@ export type ExtractedPath = {
   d: string | undefined;
   fill: ResolvedPaint;
   stroke: ResolvedPaint;
+  /** Effective `fill-rule`, inherited like `fill`; `nonzero` (SVG's default) unless `evenodd`. */
+  fillRule: FillRule;
+  /** How opaque the path's fill draws relative to the icon as a whole, 0–1; see `resolveOpacity`. */
+  opacity: number;
 };
 
 /** Stage 1 output: the document tree plus every `<path>` in it (possibly none). */
@@ -39,7 +46,11 @@ const PAINT_DEFAULTS = {
   fill: "black",
   stroke: "none",
   "stroke-width": "1",
+  "fill-rule": "nonzero",
 } as const;
+
+/** An `opacity`/`fill-opacity` value: a number, or a percentage (CSS Color 4). */
+const OPACITY_PATTERN = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)(%?)$/;
 
 const VIEWBOX_NUMBER_PATTERN = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
 
@@ -86,6 +97,11 @@ export function parseSvgMarkup(markup: string): SvgMarkup {
         d: element.attributes.get("d"),
         fill: resolvePaint(element, "fill"),
         stroke: resolvePaint(element, "stroke"),
+        fillRule:
+          resolvePaint(element, "fill-rule").value.toLowerCase() === "evenodd"
+            ? "evenodd"
+            : "nonzero",
+        opacity: resolveOpacity(element),
       });
     }
     for (const child of element.children) visit(child);
@@ -139,12 +155,8 @@ export function readPresentationValue(
   element: SvgElement,
   property: string,
 ): PresentationValue | undefined {
-  const fromStyle = readStyleDeclaration(
-    element.attributes.get("style"),
-    property,
-  );
-  if (fromStyle !== undefined && fromStyle !== "")
-    return { value: fromStyle, via: "style" };
+  const fromStyle = readStyleDeclaration(element.attributes.get("style"), property);
+  if (fromStyle !== undefined && fromStyle !== "") return { value: fromStyle, via: "style" };
   const fromAttribute = element.attributes.get(property)?.trim();
   if (fromAttribute !== undefined && fromAttribute !== "") {
     return { value: fromAttribute, via: "attribute" };
@@ -153,7 +165,7 @@ export function readPresentationValue(
 }
 
 /**
- * Resolves an inherited presentation property (`fill`, `stroke`, `stroke-width`) the way SVG
+ * Resolves an inherited presentation property (`fill`, `stroke`, `stroke-width`, `fill-rule`) the way SVG
  * inheritance does: the nearest element on the ancestor chain (the element itself first, the
  * `<svg>` root last) that sets it wins, else SVG's default. On each element an inline `style`
  * declaration beats the presentation attribute, as in CSS. `inherit` defers to the next ancestor.
@@ -162,11 +174,7 @@ export function resolvePaint(
   start: SvgElement,
   property: keyof typeof PAINT_DEFAULTS,
 ): ResolvedPaint {
-  for (
-    let element: SvgElement | undefined = start;
-    element;
-    element = element.parent
-  ) {
+  for (let element: SvgElement | undefined = start; element; element = element.parent) {
     const value = readPresentationValue(element, property)?.value;
     if (value !== undefined && value.toLowerCase() !== "inherit") {
       return { value, source: element };
@@ -175,10 +183,41 @@ export function resolvePaint(
   return { value: PAINT_DEFAULTS[property], source: undefined };
 }
 
-function readStyleDeclaration(
-  style: string | undefined,
-  property: string,
-): string | undefined {
+/**
+ * How opaque a path's fill draws relative to its icon: its effective `fill-opacity` (inherited,
+ * nearest setting wins, as for `fill`) times the `opacity` of the path and every `<g>` around it
+ * (not inherited, but each one fades its whole subtree). This is what makes a two-tone icon's
+ * faded background layer faded.
+ *
+ * The `<svg>` root's own `opacity`/`fill-opacity` is left out: like the root's `fill` colour, it
+ * styles the icon as a whole, which is the embedding page's job (spec 09 already forwards an
+ * element icon's root attributes onto `<FillMorph>`, so counting it here would apply it twice).
+ *
+ * Values are clamped to 0–1, as CSS does; an unparseable value is ignored, as browsers ignore an
+ * invalid declaration.
+ */
+function resolveOpacity(path: SvgElement): number {
+  let fillOpacity: number | undefined;
+  let opacity = 1;
+  for (
+    let element: SvgElement | undefined = path;
+    element?.parent !== undefined;
+    element = element.parent
+  ) {
+    fillOpacity ??= parseOpacity(readPresentationValue(element, "fill-opacity")?.value);
+    opacity *= parseOpacity(readPresentationValue(element, "opacity")?.value) ?? 1;
+  }
+  return (fillOpacity ?? 1) * opacity;
+}
+
+function parseOpacity(raw: string | undefined): number | undefined {
+  const match = raw === undefined ? null : OPACITY_PATTERN.exec(raw);
+  if (!match) return undefined;
+  const value = Number(match[1]) / (match[2] === "%" ? 100 : 1);
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : undefined;
+}
+
+function readStyleDeclaration(style: string | undefined, property: string): string | undefined {
   if (style === undefined) return undefined;
   let found: string | undefined;
   for (const declaration of style.split(";")) {
@@ -203,9 +242,7 @@ function parseXmlTree(source: string): SvgElement {
 
   const fail: (message: string) => never = (message) => {
     const line = text.slice(0, i).split("\n").length;
-    throw new FillmorphMarkupError(
-      `Malformed SVG markup (line ${line}): ${message}`,
-    );
+    throw new FillmorphMarkupError(`Malformed SVG markup (line ${line}): ${message}`);
   };
   const skipPast = (terminator: string, what: string): void => {
     const end = text.indexOf(terminator, i);
@@ -234,8 +271,7 @@ function parseXmlTree(source: string): SvgElement {
       i += 9;
       skipPast("]]>", "CDATA section (missing ]]>)");
     } else if (text.startsWith("<!DOCTYPE", i)) {
-      if (root || stack.length > 0)
-        fail("<!DOCTYPE> must come before the root element.");
+      if (root || stack.length > 0) fail("<!DOCTYPE> must come before the root element.");
       skipDoctype();
     } else if (text.startsWith("<?", i)) {
       i += 2;
@@ -248,8 +284,7 @@ function parseXmlTree(source: string): SvgElement {
       i++;
       const open = stack.pop();
       if (!open) fail(`closing tag </${name}> has no matching opening tag.`);
-      else if (open.name !== name)
-        fail(`<${open.name}> is closed by </${name}>.`);
+      else if (open.name !== name) fail(`<${open.name}> is closed by </${name}>.`);
     } else if (text[i] === "<") {
       i++;
       if (root && stack.length === 0) fail("more than one root element.");
@@ -268,8 +303,7 @@ function parseXmlTree(source: string): SvgElement {
     }
   }
 
-  if (stack.length > 0)
-    fail(`<${stack[stack.length - 1]?.name}> is never closed.`);
+  if (stack.length > 0) fail(`<${stack[stack.length - 1]?.name}> is never closed.`);
   if (!root) return fail("no root element found.");
   return root;
 
@@ -287,12 +321,10 @@ function parseXmlTree(source: string): SvgElement {
         return { node: attach(name, attributes), isSelfClosing: false };
       }
       if (i >= text.length) fail(`<${name}> tag is never finished.`);
-      if (!hadWhitespace)
-        fail(`expected whitespace between attributes in <${name}>.`);
+      if (!hadWhitespace) fail(`expected whitespace between attributes in <${name}>.`);
       const attributeName = readName(`an attribute name in <${name}>`);
       skipWhitespace();
-      if (text[i] !== "=")
-        fail(`attribute "${attributeName}" in <${name}> has no value.`);
+      if (text[i] !== "=") fail(`attribute "${attributeName}" in <${name}> has no value.`);
       i++;
       skipWhitespace();
       const quote = text[i];
@@ -300,11 +332,9 @@ function parseXmlTree(source: string): SvgElement {
         fail(`attribute "${attributeName}" in <${name}> is not quoted.`);
       }
       const end = text.indexOf(quote, i + 1);
-      if (end === -1)
-        fail(`attribute "${attributeName}" in <${name}> is never closed.`);
+      if (end === -1) fail(`attribute "${attributeName}" in <${name}> is never closed.`);
       const raw = text.slice(i + 1, end);
-      if (raw.includes("<"))
-        fail(`attribute "${attributeName}" in <${name}> contains "<".`);
+      if (raw.includes("<")) fail(`attribute "${attributeName}" in <${name}> contains "<".`);
       if (attributes.has(attributeName)) {
         fail(`attribute "${attributeName}" appears twice in <${name}>.`);
       }

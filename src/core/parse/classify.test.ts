@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Point } from "../contour";
-import { classifyNesting, type Nesting } from "./classify";
+import { classifyFill, classifyNesting, type Nesting } from "./classify";
 
 const rectangle = (x: number, y: number, width: number, height: number): Point[] => [
   { x, y },
@@ -87,5 +87,87 @@ describe("classifyNesting", () => {
       else expect(nesting[parentIndex]?.depth).toBe(depth - 1);
     });
     expect(nesting.map(({ depth }) => depth)).toEqual([4, 1, 3, 0, 2]);
+  });
+});
+
+describe("classifyFill", () => {
+  const reversed = (points: Point[]): Point[] => [...points].reverse();
+  const big = rectangle(0, 0, 20, 20);
+  const mid = rectangle(4, 4, 12, 12);
+  const dot = rectangle(8, 8, 4, 4);
+  const shape = (depth: number, parentIndex: number | null) => ({
+    isHole: false,
+    depth,
+    parentIndex,
+  });
+  const hole = (depth: number, parentIndex: number) => ({ isHole: true, depth, parentIndex });
+
+  it("under nonzero, cuts a hole only where the winding number drops to zero", () => {
+    expect(classifyFill([{ polygons: [big, reversed(mid)], fillRule: "nonzero" }], 0.01)).toEqual([
+      shape(0, null),
+      hole(1, 0),
+    ]);
+    expect(classifyFill([{ polygons: [big, mid], fillRule: "nonzero" }], 0.01)).toEqual([
+      shape(0, null),
+      null,
+    ]);
+  });
+
+  it("under evenodd, alternates by nesting depth whatever the winding", () => {
+    for (const inner of [mid, reversed(mid)]) {
+      expect(classifyFill([{ polygons: [big, inner, dot], fillRule: "evenodd" }], 0.01)).toEqual([
+        shape(0, null),
+        hole(1, 0),
+        shape(2, 1),
+      ]);
+    }
+  });
+
+  it("decides per path: the same polygons in two paths are a stack, not a hole", () => {
+    const paths = [
+      { polygons: [big], fillRule: "evenodd" as const },
+      { polygons: [mid], fillRule: "evenodd" as const },
+    ];
+    expect(classifyFill(paths, 0.01)).toEqual([shape(0, null), shape(0, null)]);
+  });
+
+  it("links a path's outer shape that sits in another path's hole to that hole, with flat indices", () => {
+    const paths = [
+      { polygons: [big, reversed(mid)], fillRule: "nonzero" as const },
+      { polygons: [dot], fillRule: "nonzero" as const },
+    ];
+    expect(classifyFill(paths, 0.01)).toEqual([shape(0, null), hole(1, 0), shape(2, 1)]);
+  });
+
+  it("keeps parent and child alternating between shape and hole, one depth apart, on random stacks", () => {
+    // Property-style: concentric squares with random windings and rules, in random order.
+    let seed = 7;
+    const random = (): number => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    for (let trial = 0; trial < 200; trial++) {
+      const paths = [0, 1].map(() => ({
+        fillRule: random() < 0.5 ? ("nonzero" as const) : ("evenodd" as const),
+        polygons: [0, 1, 2, 3]
+          .filter(() => random() < 0.7)
+          .map((level) => {
+            const inset = level * 2 + Math.floor(random() * 2) * 0.5;
+            const square = rectangle(inset, inset, 20 - 2 * inset, 20 - 2 * inset);
+            return random() < 0.5 ? square : reversed(square);
+          }),
+      }));
+      const result = classifyFill(paths, 0.01);
+      result.forEach((entry) => {
+        if (entry === null || entry.parentIndex === null) {
+          if (entry !== null) expect(entry).toMatchObject({ isHole: false, depth: 0 });
+          return;
+        }
+        const parent = result[entry.parentIndex];
+        expect(parent).not.toBeNull();
+        expect(parent?.isHole).toBe(!entry.isHole);
+        expect(parent?.depth).toBe(entry.depth - 1);
+      });
+    }
   });
 });

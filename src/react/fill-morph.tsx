@@ -2,7 +2,7 @@ import {
   CANONICAL_VIEW_BOX,
   type Contour,
   interpolate,
-  renderContours,
+  renderLayers,
   type SpringConfig,
 } from "fillmorph";
 import {
@@ -143,10 +143,22 @@ const MorphSvg = ({
   svgProps: FillMorphSvgProps;
   iconSvgProps: IconSvgProps | null;
 }): ReactElement => {
+  const layers = renderLayers(contours);
   return (
     // biome-ignore lint/a11y/noSvgWithoutTitle: the caller names it (or hides it) via passthrough `aria-*`/`role` props
     <svg overflow="visible" {...mergeSvgProps(iconSvgProps, svgProps)} viewBox={VIEW_BOX}>
-      <path d={renderContours(contours)} />
+      {layers.length <= 1 && (layers[0]?.opacity ?? 1) === 1 ? (
+        <path d={layers[0]?.d ?? ""} />
+      ) : (
+        layers.map((layer, index) => (
+          <path
+            // biome-ignore lint/suspicious/noArrayIndexKey: layers have no identity beyond their position; a re-keyed <path> just gets a new d
+            key={index}
+            d={layer.d}
+            fillOpacity={layer.opacity === 1 ? undefined : layer.opacity}
+          />
+        ))
+      )}
     </svg>
   );
 };
@@ -221,7 +233,8 @@ const ControlledFillMorph = ({
 
 /**
  * Morphs filled SVG icons (spec 06), rendering one `<svg viewBox={CANONICAL_VIEW_BOX}>` with a
- * single `<path>` drawn by core's `renderContours`. Icons are full SVG markup or React elements
+ * single `<path>` - or, for an icon with translucent parts such as a two-tone icon's faded layer,
+ * one `<path fill-opacity>` per layer (core's `renderLayers`, spec 11). Icons are full SVG markup or React elements
  * that render it (`icon={<FaHeart />}`, spec 09); either way they must meet spec 02's contract.
  *
  * - **Uncontrolled** (no `progress`): shows `icon`; changing it springs to the new icon from

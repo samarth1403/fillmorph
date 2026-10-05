@@ -43,7 +43,7 @@ icon set) - fillmorph doesn't ship a built-in icon library.
 4. 🎛️ [Choose How It Moves](#spring-feel)
 5. 📚 [API Reference](#api-reference)
 6. 🧾 [Icon Requirements](#icon-requirements)
-7. ⚠️ [Known Limitations](#known-limitation)
+7. ⚠️ [Known Limitation](#known-limitation)
 8. 📄 [License](#license)
 
 ## <a name="works-on">✨ What It Works On</a>
@@ -51,7 +51,8 @@ icon set) - fillmorph doesn't ship a built-in icon library.
 - ✅ **Works on:** any filled icon drawn as a closed shape - a solid shape, an outline
   that's actually a filled ring, or a shape with one or more cutouts inside it (think of
   how a hole in a letter or a keyhole in a lock is just an empty space cut out of a solid
-  shape). A cutout can even hold a shape of its own, one level deep.
+  shape). A cutout can even hold a shape of its own, one level deep. Two-tone icons keep
+  their faded layer faded.
 - 🚫 **Doesn't work on:** icons drawn as strokes/lines rather than fills (the style used
   by icon sets like Lucide, Tabler, or Feather). fillmorph rejects these with a clear
   error immediately, instead of animating them badly - whether you pass the SVG markup or
@@ -130,6 +131,10 @@ driver.subscribe((shape) => path.setAttribute("d", renderContours(shape)));
 ```
 
 Call `driver.retarget(from)` later to morph back the other way.
+
+For icons with translucent parts (a two-tone icon's faded layer), draw `renderLayers(shape)`
+instead: one `<path d fill-opacity>` per layer. For a fully opaque icon it's a single layer
+with the same `d` as `renderContours`.
 
 ## <a name="install">📦 Install</a>
 
@@ -221,7 +226,8 @@ createMorphDriver(from: Contour[], to: Contour[], config?: SpringConfig): {
 ```
 
 It runs on `requestAnimationFrame` and never touches the DOM itself: your listener draws
-the shape, usually with `renderContours`.
+the shape, usually with `renderContours` (or `renderLayers`, for icons with translucent
+parts).
 
 </details>
 
@@ -233,6 +239,7 @@ the shape, usually with `renderContours`.
 | `parseIcon(svg)`                                                                | Parses SVG markup into `{ contours, viewBox }`, contours in a `0 0 100 100` frame. Throws a typed error for icons outside the requirements. |
 | `interpolate(from, to, progress)`                                               | The shape between two parsed icons at `progress` 0–1.                                                                                       |
 | `renderContours(contours)`                                                      | An SVG path `d` string for a shape.                                                                                                         |
+| `renderLayers(contours)`                                                        | `{ d, opacity }[]`, one per opacity, for drawing translucent parts (e.g. two-tone icons) as separate `<path fill-opacity>`s.               |
 | `startMorph` / `advanceMorph` / `retargetMorph`                                 | The pure spring-driven morph state machine the driver runs, for custom loops.                                                               |
 | `stepSpring(state, config, target, dt)`                                         | One exact step of the damped spring.                                                                                                        |
 | `CANONICAL_VIEW_BOX`                                                            | The `0 0 100 100` frame every shape is drawn in.                                                                                            |
@@ -250,45 +257,39 @@ fillmorph morphs icons that are **filled shapes drawn with `<path>`**:
   visible stroke) is rejected as a stroke icon. Elements that draw nothing at all -
   `display="none"`, or `fill="none"` with no visible stroke, like Material Design's invisible
   bounding-box path - are ignored.
-- 🔒 **Closed paths** only, with a `viewBox` (or plain numeric `width` and `height`).
+- 🔒 **A frame:** a `viewBox` (or plain numeric `width` and `height`).
 - 🕳️ **Cutouts nested one level deep:** an outline, cutouts in it, and shapes inside those
   cutouts. Deeper nesting parses but isn't guaranteed to morph well.
 - 🧼 **Plain SVG:** no `<circle>`/`<rect>`/other shapes, `<style>`, `transform`, `<use>`,
-  gradients, masks or clip paths. Either `fill-rule` works.
+  gradients, masks or clip paths.
+
+Shapes are read the way a browser fills them. Each path's `fill-rule` (`nonzero` or
+`evenodd`) and winding decide what's a cutout, and separate `<path>`s stack on top of each
+other, never cutting into one another. A path's `fill-opacity` and `opacity` carry over. A
+subpath without `Z` is filled as if closed, and one that encloses no area is skipped.
 
 Anything outside this is a parse-time error naming the problem, never a silent bad morph.
-Most of Font Awesome Free's solid and regular icons fit as they are: 365 of the 379 we
-tried (the rest nest too deeply, or have a zero-area subpath).
 
-## <a name="known-limitation">⚠️ Known Limitations</a>
-
-### Complex and highly concave outlines
+## <a name="known-limitation">⚠️ Known Limitation: complex and highly concave outlines</a>
 
 Morphs between very complex or highly concave icon outlines can show geometry artifacts
 mid-morph: an outline briefly crossing itself, or a hole briefly poking outside its shape.
 The start and end shapes are always exact - the artifacts appear only in between.
 
-This is measured, not estimated. We morphed every ordered pair from a pool of 365 Font
-Awesome Free 6.7.2 icons that fillmorph accepts (all 163 Regular icons plus 216 common
-Solid ones, less 14 it rejects) and ran each morph through the project's geometry checks
-at 11 points along the way. **42% of pairs (56,436 of 132,860) failed at least one
-check.** Failures concentrate on intricate or deeply concave outlines (for example
-paperclip, at, headphones, music, folder-open, floppy-disk), which fail against most
-other icons.
+This is measured, not estimated. Our pool is every Font Awesome Free 6.7.2 Solid and
+Regular icon (1,565). fillmorph accepts 1,550 of them, up from 1,534 in 0.2.2, rejecting
+14 that nest too deeply and one (`s`) whose outline crosses itself. We took a random
+sample of 200,000 of the 2,400,950 ordered pairs of those 1,550 icons. Each morph ran
+through the project's geometry checks at 11 points along the way. **52% of sampled
+pairs (103,990 of 200,000; ±0.2 percentage points) failed at least one check.** Failures
+concentrate on intricate or deeply concave outlines (for example paperclip, at,
+floppy-disk, bezier-curve, code-branch, network-wired), which fail against nearly every
+other icon. An earlier measurement found 42%, but on a smaller hand-picked pool of more
+common icons. On the same pairs, 0.2.2 and 0.3.0 fail at the same rate.
 
 The 164 icons in the demo are verified clean: every ordered pair among them (26,732
 morphs) passes every check. To check your own icon set the same way, run
 `pnpm harness --vet-icons <folder>` from a clone of this repository.
-
-### A few two-tone Material Design icons draw a wrong cutout
-
-These 8 two-tone icons from `react-icons/md` are accepted but draw incorrectly, instead of
-being rejected: `MdSignalWifi1Bar`, `MdSignalWifi1BarLock`, `MdSignalWifi2Bar`,
-`MdSignalWifi2BarLock`, `MdSignalWifi3Bar`, `MdSignalWifi3BarLock`, `MdWifiCalling1` and
-`MdWifiCalling2`. Each draws a solid shape on top of a faded copy of the full icon, as two
-separate overlapping paths. fillmorph's hole detection doesn't yet treat separate paths as
-layered on top of each other, so it cuts the solid shape out as a hole. This will be fixed
-by the planned hole-detection and `fill-rule` work.
 
 ## <a name="license">📄 License</a>
 

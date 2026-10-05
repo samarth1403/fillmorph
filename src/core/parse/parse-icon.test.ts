@@ -8,12 +8,12 @@ import {
 import { signedArea } from "./geometry";
 import { parseIcon } from "./parse-icon";
 import {
-  BROKEN_DEGENERATE_SUBPATH,
   BROKEN_MALFORMED_XML,
-  BROKEN_OPEN_SUBPATH,
+  BROKEN_NO_AREA,
   CUSTOM_BULLSEYE,
   CUSTOM_INKSCAPE_RING,
   CUSTOM_TWO_HOLES,
+  DEGENERATE_SUBPATH,
   FA_REGULAR_CIRCLE,
   FA_SOLID_BULLSEYE,
   FA_SOLID_CIRCLE,
@@ -21,6 +21,8 @@ import {
   ILLUSTRATOR_STYLESHEET_STROKE,
   LUCIDE_CIRCLE_CHECK,
   LUCIDE_HEART,
+  MD_TWO_TONE,
+  OPEN_SUBPATH,
   STYLESHEET_STROKE_IN_DEFS,
 } from "./test-fixtures";
 
@@ -147,28 +149,10 @@ describe("parseIcon - each failure mode has its own error type", () => {
     );
   });
 
-  it("throws FillmorphParseError for an open subpath, locating it and saying how to fix it", () => {
-    expect(() => parseIcon(BROKEN_OPEN_SUBPATH)).toThrow(FillmorphParseError);
-    expect(() => parseIcon(BROKEN_OPEN_SUBPATH)).toThrow(
-      // Original viewBox units (canonical would be 75, 75 and 25, 25): errors quote what the author wrote.
-      /Subpath 2 of <path> #1 is open: .*end point \(18, 18\).*start \(6, 6\).*close the subpath with "Z"/,
-    );
-  });
-
-  it("throws FillmorphParseError for a degenerate zero-area subpath", () => {
-    expect(() => parseIcon(BROKEN_DEGENERATE_SUBPATH)).toThrow(
-      FillmorphParseError,
-    );
-    expect(() => parseIcon(BROKEN_DEGENERATE_SUBPATH)).toThrow(
-      /Subpath 2 of <path> #1 is degenerate/,
-    );
-  });
-
-  it("throws FillmorphParseError for a zero-length 'M x y Z' subpath", () => {
-    const markup = svg('<path d="M0 0H10V10Z M5 5Z"/>');
-    expect(() => parseIcon(markup)).toThrow(FillmorphParseError);
-    expect(() => parseIcon(markup)).toThrow(
-      /Subpath 2 of <path> #1 is degenerate/,
+  it("throws FillmorphParseError when no subpath in the icon encloses any area", () => {
+    expect(() => parseIcon(BROKEN_NO_AREA)).toThrow(FillmorphParseError);
+    expect(() => parseIcon(BROKEN_NO_AREA)).toThrow(
+      /None of the icon's subpaths encloses any area/,
     );
   });
 
@@ -190,7 +174,7 @@ describe("parseIcon - each failure mode has its own error type", () => {
   it("uses three distinct error classes", () => {
     const errors = [
       BROKEN_MALFORMED_XML,
-      BROKEN_OPEN_SUBPATH,
+      BROKEN_NO_AREA,
       LUCIDE_HEART,
     ].map((markup) => {
       try {
@@ -217,6 +201,43 @@ describe("parseIcon - each failure mode has its own error type", () => {
     expect(contoursOf(svg('<path d="M0 0 L10 0 L10 10 L0 0"/>'))).toHaveLength(
       1,
     );
+  });
+});
+
+describe("parseIcon - a bad subpath is skipped, not fatal (spec 11 #2)", () => {
+  it("fills a subpath without Z as if closed, as browsers do, instead of rejecting the icon", () => {
+    const closed = svg(
+      '<path fill-rule="evenodd" d="M2 2H22V22H2Z M6 6 L18 6 L18 18Z"/>',
+    );
+    expect(parseIcon(OPEN_SUBPATH)).toEqual(parseIcon(closed));
+    expect(tree(contoursOf(OPEN_SUBPATH))).toEqual([
+      { id: "c0", parentId: null, isHole: false, depth: 0 },
+      { id: "c1", parentId: "c0", isHole: true, depth: 1 },
+    ]);
+  });
+
+  it("fills a lone open subpath with area, rather than dropping it (Material's MdImagesearchRoller-style)", () => {
+    expect(parseIcon(svg('<path d="M2 2 L22 2 L22 22"/>'))).toEqual(
+      parseIcon(svg('<path d="M2 2 L22 2 L22 22Z"/>')),
+    );
+  });
+
+  it("skips a zero-area subpath, drawing the rest exactly as without it", () => {
+    expect(parseIcon(DEGENERATE_SUBPATH)).toEqual(
+      parseIcon(svg('<path d="M2 2H22V22H2Z"/>')),
+    );
+  });
+
+  it("skips a zero-length 'M x y Z' subpath and an open straight line", () => {
+    const square = parseIcon(svg('<path d="M0 0H10V10H0Z"/>'));
+    expect(parseIcon(svg('<path d="M0 0H10V10H0Z M5 5Z"/>'))).toEqual(square);
+    expect(parseIcon(svg('<path d="M0 0H10V10H0Z M2 2 L8 8"/>'))).toEqual(square);
+  });
+
+  it("skips a path whose every subpath is degenerate, keeping the other paths", () => {
+    expect(
+      parseIcon(svg('<path d="M1 1 L5 5"/><path d="M0 0H10V10H0Z"/>')),
+    ).toEqual(parseIcon(svg('<path d="M0 0H10V10H0Z"/>')));
   });
 });
 
@@ -253,7 +274,7 @@ describe("parseIcon - hole classification and the containment tree", () => {
 
   it("links each hole to its own outer shape when an icon has several outer shapes", () => {
     const markup = svg(
-      '<path d="M0 0H10V10H0Z M2 2H8V8H2Z"/><path d="M12 0H22V10H12Z M14 2H20V8H14Z"/>',
+      '<path d="M0 0H10V10H0Z M2 2V8H8V2Z"/><path d="M12 0H22V10H12Z M14 2V8H20V2Z"/>',
     );
     expect(tree(contoursOf(markup))).toEqual([
       { id: "c0", parentId: null, isHole: false, depth: 0 },
@@ -286,16 +307,11 @@ describe("parseIcon - hole classification and the containment tree", () => {
     expect(opposite).toEqual(sameDirection);
   });
 
-  it("classifies a same-winding nested contour under nonzero as a hole (known limitation)", () => {
-    // Browsers draw this inner square filled (nonzero, same direction), but spec 02 locks
-    // containment-only classification, so it is still a hole here.
+  it("fills a same-winding nested contour under nonzero, as browsers do, rather than cutting a hole", () => {
     const contours = contoursOf(
       svg('<path fill-rule="nonzero" d="M0 0H10V10H0Z M2 2H8V8H2Z"/>'),
     );
-    expect(tree(contours)).toEqual([
-      { id: "c0", parentId: null, isHole: false, depth: 0 },
-      { id: "c1", parentId: "c0", isHole: true, depth: 1 },
-    ]);
+    expect(contours).toEqual(contoursOf(svg('<path d="M0 0H10V10H0Z"/>')));
   });
 
   it("keeps the containment tree consistent on every fixture", () => {
@@ -317,6 +333,193 @@ describe("parseIcon - hole classification and the containment tree", () => {
         expect(area(parent)).toBeGreaterThan(area(contour));
       }
     }
+  });
+});
+
+describe("parseIcon - holes follow fill-rule and winding, as browsers fill (spec 11 #1)", () => {
+  const OUTER = "M0 0H20V20H0Z";
+  const SAME = "M4 4H16V16H4Z";
+  const OPPOSITE = "M4 4V16H16V4Z";
+  const SOLID = contoursOf(svg(`<path d="${OUTER}"/>`));
+
+  it("cuts a hole for an oppositely wound nested subpath under nonzero", () => {
+    expect(tree(contoursOf(svg(`<path d="${OUTER} ${OPPOSITE}"/>`)))).toEqual([
+      { id: "c0", parentId: null, isHole: false, depth: 0 },
+      { id: "c1", parentId: "c0", isHole: true, depth: 1 },
+    ]);
+  });
+
+  it("treats a missing fill-rule as nonzero, SVG's default", () => {
+    expect(contoursOf(svg(`<path d="${OUTER} ${SAME}"/>`))).toEqual(SOLID);
+  });
+
+  it("cuts a hole for the same nested subpath under evenodd, whatever its winding", () => {
+    for (const inner of [SAME, OPPOSITE]) {
+      expect(
+        holes(contoursOf(svg(`<path fill-rule="evenodd" d="${OUTER} ${inner}"/>`))),
+      ).toHaveLength(1);
+    }
+  });
+
+  it("keeps evenodd's alternating fill/hole pattern over four nested same-winding subpaths", () => {
+    const nested = [0, 3, 6, 8].map(
+      (inset) => `M${inset} ${inset}H${20 - inset}V${20 - inset}H${inset}Z`,
+    );
+    expect(
+      tree(contoursOf(svg(`<path fill-rule="evenodd" d="${nested.join(" ")}"/>`))),
+    ).toEqual([
+      { id: "c0", parentId: null, isHole: false, depth: 0 },
+      { id: "c1", parentId: "c0", isHole: true, depth: 1 },
+      { id: "c2", parentId: "c1", isHole: false, depth: 2 },
+      { id: "c3", parentId: "c2", isHole: true, depth: 3 },
+    ]);
+  });
+
+  it("sums winding down the nesting under nonzero: an island in a hole is filled, whichever way it winds", () => {
+    for (const island of ["M8 8H12V12H8Z", "M8 8V12H12V8Z"]) {
+      expect(tree(contoursOf(svg(`<path d="${OUTER} ${OPPOSITE} ${island}"/>`)))).toEqual([
+        { id: "c0", parentId: null, isHole: false, depth: 0 },
+        { id: "c1", parentId: "c0", isHole: true, depth: 1 },
+        { id: "c2", parentId: "c1", isHole: false, depth: 2 },
+      ]);
+    }
+  });
+
+  it("drops every nested subpath that changes no fill, re-linking what's inside to the nearest kept one", () => {
+    // Winding 1, then 2 inside the same-way square, then 1 inside the opposite one: all filled.
+    expect(
+      contoursOf(svg(`<path d="${OUTER} ${SAME} M8 8V12H12V8Z"/>`)),
+    ).toEqual(SOLID);
+    // The dropped same-way square doesn't stop the hole beneath it from linking to the outer shape.
+    // Winding: 1 (outer), 2 (same-way), 0 (the two opposite ones) - a hole.
+    const twoDeep = contoursOf(
+      svg(`<path d="${OUTER} M2 2H18V18H2Z M3 3V17H17V3Z ${OPPOSITE}"/>`),
+    );
+    expect(tree(twoDeep)).toEqual([
+      { id: "c0", parentId: null, isHole: false, depth: 0 },
+      { id: "c1", parentId: "c0", isHole: true, depth: 1 },
+    ]);
+  });
+
+  it("reads fill-rule inherited from a <g> or the <svg> root, and from an inline style", () => {
+    const evenodd = contoursOf(svg(`<path fill-rule="evenodd" d="${OUTER} ${SAME}"/>`));
+    expect(contoursOf(svg(`<g fill-rule="evenodd"><path d="${OUTER} ${SAME}"/></g>`))).toEqual(
+      evenodd,
+    );
+    expect(
+      contoursOf(svg(`<path d="${OUTER} ${SAME}"/>`, ' viewBox="0 0 24 24" fill-rule="evenodd"')),
+    ).toEqual(evenodd);
+    expect(
+      contoursOf(svg(`<path style="fill-rule: evenodd" fill-rule="nonzero" d="${OUTER} ${SAME}"/>`)),
+    ).toEqual(evenodd);
+    expect(
+      contoursOf(svg(`<g fill-rule="evenodd"><path fill-rule="nonzero" d="${OUTER} ${SAME}"/></g>`)),
+    ).toEqual(SOLID);
+  });
+
+  it("draws a small path stacked on a big one as two solid shapes, with no hole", () => {
+    const contours = contoursOf(svg(`<path d="${OUTER}"/><path d="${SAME}"/>`));
+    expect(tree(contours)).toEqual([
+      { id: "c0", parentId: null, isHole: false, depth: 0 },
+      { id: "c1", parentId: null, isHole: false, depth: 0 },
+    ]);
+  });
+
+  it("never lets one path's hole cut another path, or a stacked path become a hole, under either rule", () => {
+    for (const rule of ["nonzero", "evenodd"]) {
+      const ring = `<path fill-rule="${rule}" d="M6 6H14V14H6Z M8 8V12H12V8Z"/>`;
+      expect(tree(contoursOf(svg(`<path fill-rule="${rule}" d="${OUTER}"/>${ring}`)))).toEqual([
+        { id: "c0", parentId: null, isHole: false, depth: 0 },
+        { id: "c1", parentId: null, isHole: false, depth: 0 },
+        { id: "c2", parentId: "c1", isHole: true, depth: 1 },
+      ]);
+    }
+  });
+
+  it("links a separate path drawn inside another path's hole to that hole, as an island", () => {
+    expect(
+      tree(contoursOf(svg(`<path d="${OUTER} ${OPPOSITE}"/><path d="M8 8H12V12H8Z"/>`))),
+    ).toEqual([
+      { id: "c0", parentId: null, isHole: false, depth: 0 },
+      { id: "c1", parentId: "c0", isHole: true, depth: 1 },
+      { id: "c2", parentId: "c1", isHole: false, depth: 2 },
+    ]);
+  });
+
+  // Spec 10's repro list: a solid shape drawn over a faded copy of the whole icon, as two paths.
+  // The hole counts are each path's own, summed ("Holes (each path parsed alone)").
+  const TWO_TONE_MD: [string, number][] = [
+    ["MdSignalWifi1Bar", 0],
+    ["MdSignalWifi1BarLock", 1],
+    ["MdSignalWifi2Bar", 0],
+    ["MdSignalWifi2BarLock", 1],
+    ["MdSignalWifi3Bar", 0],
+    ["MdSignalWifi3BarLock", 1],
+    ["MdWifiCalling1", 2],
+    ["MdWifiCalling2", 2],
+  ];
+  it.each(TWO_TONE_MD)("draws %s with its own %i holes, the faded layer faded and the top shape opaque", (name, holeCount) => {
+    const contours = contoursOf(MD_TWO_TONE[name] as string);
+    expect(holes(contours)).toHaveLength(holeCount);
+    expect(new Set(contours.map((contour) => contour.opacity ?? 1))).toEqual(new Set([0.3, 1]));
+    const filled = outers(contours);
+    expect(filled.some((contour) => contour.opacity === 0.3)).toBe(true);
+    expect(filled.some((contour) => contour.opacity === undefined)).toBe(true);
+  });
+});
+
+describe("parseIcon - fill-opacity and opacity (spec 11 #1)", () => {
+  const SQUARE = "M0 0H10V10H0Z";
+  const opacitiesOf = (markup: string) =>
+    contoursOf(markup).map((contour) => contour.opacity);
+
+  it("leaves opaque contours without an opacity field, so opaque icons parse exactly as before", () => {
+    expect(contoursOf(FA_SOLID_HEART)[0]).not.toHaveProperty("opacity");
+    expect(contoursOf(svg(`<path fill-opacity="1" d="${SQUARE}"/>`))[0]).not.toHaveProperty(
+      "opacity",
+    );
+  });
+
+  it("carries a path's fill-opacity, as a number, a percentage or an inline style", () => {
+    expect(opacitiesOf(svg(`<path fill-opacity=".3" d="${SQUARE}"/>`))).toEqual([0.3]);
+    expect(opacitiesOf(svg(`<path fill-opacity="40%" d="${SQUARE}"/>`))).toEqual([0.4]);
+    expect(opacitiesOf(svg(`<path style="fill-opacity: 0.5" fill-opacity=".3" d="${SQUARE}"/>`))).toEqual([0.5]);
+  });
+
+  it("inherits fill-opacity from a <g>, the nearest one winning", () => {
+    expect(
+      opacitiesOf(svg(`<g fill-opacity=".5"><g fill-opacity=".3"><path d="${SQUARE}"/></g></g>`)),
+    ).toEqual([0.3]);
+    expect(
+      opacitiesOf(svg(`<g fill-opacity=".5"><path fill-opacity=".8" d="${SQUARE}"/></g>`)),
+    ).toEqual([0.8]);
+  });
+
+  it("multiplies in the opacity of the path and every <g> around it", () => {
+    const [opacity] = opacitiesOf(
+      svg(`<g opacity=".5"><path opacity=".5" fill-opacity=".8" d="${SQUARE}"/></g>`),
+    );
+    expect(opacity).toBeCloseTo(0.2, 12);
+  });
+
+  it("gives a hole its path's opacity, the same as the shape it cuts", () => {
+    expect(
+      opacitiesOf(svg(`<path fill-opacity=".3" d="${SQUARE} M2 2V8H8V2Z"/>`)),
+    ).toEqual([0.3, 0.3]);
+  });
+
+  it("ignores the <svg> root's own opacity and fill-opacity, which style the icon as a whole", () => {
+    expect(
+      contoursOf(svg(`<path d="${SQUARE}"/>`, ' viewBox="0 0 24 24" opacity=".5" fill-opacity=".5"'))[0],
+    ).not.toHaveProperty("opacity");
+  });
+
+  it("clamps out-of-range values and ignores unparseable ones, as browsers do", () => {
+    expect(opacitiesOf(svg(`<path fill-opacity="2" d="${SQUARE}"/>`))).toEqual([undefined]);
+    expect(opacitiesOf(svg(`<path opacity="-1" d="${SQUARE}"/>`))).toEqual([0]);
+    expect(
+      opacitiesOf(svg(`<g fill-opacity=".3"><path fill-opacity="half" d="${SQUARE}"/></g>`)),
+    ).toEqual([0.3]);
   });
 });
 
@@ -582,7 +785,10 @@ describe("parseIcon - normalization", () => {
       "M0 10V0H10V10Z M2 8H8V2H2Z",
       "m10 0v10h-10v-10z m-2 2h-6v6h6z",
     ];
-    const results = authorings.map((d) => parseIcon(svg(`<path d="${d}"/>`)));
+    // evenodd, so the inner square is a hole however each authoring winds it.
+    const results = authorings.map((d) =>
+      parseIcon(svg(`<path fill-rule="evenodd" d="${d}"/>`)),
+    );
     expect(tree(results[0]?.contours ?? [])).toEqual([
       { id: "c0", parentId: null, isHole: false, depth: 0 },
       { id: "c1", parentId: "c0", isHole: true, depth: 1 },

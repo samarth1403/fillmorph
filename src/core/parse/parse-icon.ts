@@ -2,7 +2,7 @@ import type { Contour, Point } from "../contour";
 import { FillmorphParseError } from "../errors";
 import type { ParsedIcon } from "../icon";
 import { createCanonicalMapping } from "./canonical-frame";
-import { classifyNesting, type Nesting } from "./classify";
+import { classifyFill } from "./classify";
 import { describePath, validateIconContract } from "./contract";
 import {
   contourTolerance,
@@ -45,19 +45,29 @@ const DEGENERATE_AREA_RATIO = 1e-9;
  *    (`FillmorphParseError`). The icon-type check runs first because stroke icons routinely
  *    contain open subpaths, and "this is a stroke icon" is the accurate diagnosis for them.
  *
- * Every closed subpath of every rendered `<path>` becomes one `Contour`, flattened adaptively
- * (content-aware point density, with a tolerance relative to that contour's own size, capped at
- * the icon-wide one - see `contourTolerance`; no cross-icon point-count reconciliation),
- * classified as outer/hole by containment, mapped into the canonical frame, and normalized in
- * winding and start point (see `Contour`). Contours are returned in document order, with ids `"c0"`, `"c1"`, … in that order
- * and each non-outer contour's `parentId` pointing at its innermost container.
+ * Every subpath of every rendered `<path>` that encloses area becomes one `Contour`, flattened
+ * adaptively (content-aware point density, with a tolerance relative to that contour's own size,
+ * capped at the icon-wide one - see `contourTolerance`; no cross-icon point-count
+ * reconciliation), classified as outer/hole the way a browser fills it (`classifyFill`: each
+ * path's `fill-rule` and winding, and never a hole across separate paths), mapped into the
+ * canonical frame, and normalized in winding and start point (see `Contour`). Contours are
+ * returned in document order, with ids `"c0"`, `"c1"`, … in that order and each non-outer
+ * contour's `parentId` pointing at the contour directly around it.
  *
- * Elements that draw nothing - `display: none`, or `fill: none` with no visible stroke (such as
- * Material Design's invisible bounding-box path) - are skipped entirely, contributing no geometry.
+ * Geometry that draws nothing contributes nothing, as in a browser:
+ * - elements that draw nothing - `display: none`, or `fill: none` with no visible stroke (such
+ *   as Material Design's invisible bounding-box path) - are skipped entirely;
+ * - a subpath that encloses no area (a point, or a straight line) is skipped;
+ * - a nested subpath that changes no fill (under `nonzero`, one wound the same way as its
+ *   container) is dropped.
+ *
+ * A subpath without "Z" is filled as if closed, as browsers fill it. A path's `fill-opacity` and
+ * `opacity` (times its `<g>`s') become its contours' `opacity`.
  *
  * @throws FillmorphMarkupError if the markup is not a well-formed SVG with at least one `<path>`.
  * @throws FillmorphIncompatibleIconError if the icon is outside the compatibility contract.
- * @throws FillmorphParseError if a path's `d` is malformed, open, or degenerate.
+ * @throws FillmorphParseError if a path's `d` is missing or malformed, or no subpath in the icon
+ *   encloses any area.
  */
 export function parseIcon(svg: string): ParsedIcon {
   const markup = parseSvgMarkup(svg);
@@ -71,33 +81,51 @@ export function parseIcon(svg: string): ParsedIcon {
   const tolerance = extent * FLATTEN_TOLERANCE_RATIO;
   const samePointTolerance = extent * SAME_POINT_RATIO;
 
-  const polygons = parsedPaths.flatMap(({ path, subpaths }) =>
-    subpaths.map((subpath, subpathIndex) =>
-      buildPolygon(subpath, tolerance, samePointTolerance, extent, () =>
-        describeSubpath(path, subpathIndex),
-      ),
-    ),
-  );
+  // A subpath with no area draws nothing in a browser, so it's skipped rather than rejecting the
+  // icon (spec 11 #2); only an icon left with nothing at all is an error.
+  const layers = parsedPaths.map(({ path, subpaths }) => ({
+    path,
+    polygons: subpaths.flatMap((subpath) => {
+      const polygon = buildPolygon(subpath, tolerance, samePointTolerance, extent);
+      return polygon === null ? [] : [polygon];
+    }),
+    fillRule: path.fillRule,
+  }));
+  const polygons = layers.flatMap((layer) => layer.polygons);
+  if (polygons.length === 0) {
+    throw new FillmorphParseError(
+      "None of the icon's subpaths encloses any area (every one is a point or a straight line), " +
+        "so it draws nothing fillmorph can morph.",
+    );
+  }
+  const opacities = layers.flatMap(({ path, polygons: own }) => own.map(() => path.opacity));
 
-  const nesting = classifyNesting(polygons, tolerance);
+  const classified = classifyFill(layers, tolerance);
+  // Polygons that bound nothing (filled on both sides) are dropped; ids stay consecutive.
+  const idOf = new Map<number, string>();
+  classified.forEach((entry, index) => {
+    if (entry !== null) idOf.set(index, contourId(idOf.size));
+  });
   // Mapped before winding/start-point normalization so those invariants hold exactly in the
   // coordinates actually returned. A uniform positive scale can't change winding or which point
   // is topmost/leftmost, but float rounding could perturb an exact tie.
   const { scale, toCanonical } = createCanonicalMapping(viewBox);
-  const contours = polygons.map((points, index): Contour => {
-    const { depth, parentIndex } = nesting[index] as Nesting;
-    const isHole = depth % 2 === 1;
-    return {
-      id: contourId(index),
-      parentId: parentIndex === null ? null : contourId(parentIndex),
+  const contours = classified.flatMap((entry, index): Contour[] => {
+    if (entry === null) return [];
+    const { isHole, depth, parentIndex } = entry;
+    const opacity = opacities[index] as number;
+    const contour: Contour = {
+      id: idOf.get(index) as string,
+      parentId: parentIndex === null ? null : (idOf.get(parentIndex) as string),
       points: normalizeContour(
-        points.map(toCanonical),
+        (polygons[index] as Point[]).map(toCanonical),
         isHole,
         samePointTolerance * scale,
       ),
       isHole,
       depth,
     };
+    return [opacity === 1 ? contour : { ...contour, opacity }];
   });
   return { contours, viewBox };
 }
@@ -122,40 +150,32 @@ function readSubpaths(path: ExtractedPath): Subpath[] {
   }
 }
 
+/**
+ * Flattens one subpath into a closed polygon, or returns `null` if it encloses no area.
+ *
+ * A subpath without `Z` is closed by a straight line back to its start, which is exactly how SVG
+ * fills it (spec 11 #2): the fill of an open subpath is drawn as if it ended in "Z".
+ */
 function buildPolygon(
   subpath: Subpath,
   tolerance: number,
   samePointTolerance: number,
   extent: number,
-  describe: () => string,
-): Point[] {
+): Point[] | null {
   // Flattening uses the contour's own (capped) tolerance so small contours stay as smooth as
   // large ones; the closing and classification checks keep the icon-wide one, since they absorb
   // exporter rounding in absolute units rather than judging smoothness.
-  const flattened = flattenSubpath(
-    subpath,
-    contourTolerance(subpath, tolerance),
-  );
-  const end = flattened[flattened.length - 1] as Point;
-  if (!subpath.hasClosePath && distance(end, subpath.start) > tolerance) {
-    throw new FillmorphParseError(
-      `${describe()} is open: it doesn't end with "Z" and its end point ${formatPoint(end)} ` +
-        `doesn't return to its start ${formatPoint(subpath.start)}. fillmorph only morphs closed ` +
-        'filled shapes - close the subpath with "Z".',
-    );
-  }
+  const flattened = flattenSubpath(subpath, contourTolerance(subpath, tolerance));
 
   const points: Point[] = [];
   for (const point of flattened) {
     const previous = points[points.length - 1];
-    if (!previous || distance(previous, point) > samePointTolerance)
-      points.push(point);
+    if (!previous || distance(previous, point) > samePointTolerance) points.push(point);
   }
   // Closing (explicit `Z` or implicit) is represented by the implicit last-to-first edge.
   while (
     points.length > 1 &&
-    distance(points[points.length - 1] as Point, points[0] as Point) <=
-      tolerance
+    distance(points[points.length - 1] as Point, points[0] as Point) <= tolerance
   ) {
     points.pop();
   }
@@ -164,22 +184,11 @@ function buildPolygon(
     points.length < 3 ||
     Math.abs(signedArea(points)) <= extent * extent * DEGENERATE_AREA_RATIO
   ) {
-    throw new FillmorphParseError(
-      `${describe()} is degenerate: it encloses no area (its points are coincident or collinear). ` +
-        "Remove it from the path data.",
-    );
+    return null;
   }
   return points;
 }
 
-function describeSubpath(path: ExtractedPath, subpathIndex: number): string {
-  return `Subpath ${subpathIndex + 1} of ${describePath(path)}`;
-}
-
 function distance(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
-}
-
-function formatPoint(point: Point): string {
-  return `(${Number(point.x.toFixed(3))}, ${Number(point.y.toFixed(3))})`;
 }

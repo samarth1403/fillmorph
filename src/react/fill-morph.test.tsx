@@ -10,6 +10,7 @@ import {
   type MorphState,
   parseIcon,
   renderContours,
+  renderLayers,
   retargetMorph,
   type SpringConfig,
   startMorph,
@@ -19,7 +20,7 @@ import { Circle, Heart } from "lucide-react";
 import { act, Component, createRef, type ReactElement, type ReactNode, StrictMode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FaCircle, FaHeart, FaRegCircle } from "react-icons/fa6";
-import { MdFavorite } from "react-icons/md";
+import { MdFavorite, MdSignalWifi1Bar } from "react-icons/md";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import FillMorph, { type FillMorphHandle } from "./fill-morph";
 import { type FillMorphIcon, FillmorphIconInputError, getIconRendererState } from "./icon-source";
@@ -1021,5 +1022,45 @@ describe("<FillMorph> forwarded attributes while react-dom/server first loads", 
     await load.release();
     expect(svg.getAttribute("width")).toBe("32");
     expect(svg.style.color).toBe("red");
+  });
+});
+
+describe("<FillMorph> translucent layers (spec 11)", () => {
+  const TWO_TONE = renderToStaticMarkup(<MdSignalWifi1Bar />);
+  const pathsOf = (container: HTMLElement) =>
+    [...container.querySelectorAll("path")].map((path) => ({
+      d: path.getAttribute("d"),
+      opacity: path.getAttribute("fill-opacity"),
+    }));
+
+  it("draws a two-tone icon as one <path> per opacity, the faded layer faded", () => {
+    const { container } = track(mount(<FillMorph icon={TWO_TONE} progress={0} to={TWO_TONE} />));
+    expect(pathsOf(container)).toEqual(
+      renderLayers(contoursOf(TWO_TONE)).map(({ d, opacity }) => ({
+        d,
+        opacity: opacity === 1 ? null : String(opacity),
+      })),
+    );
+    expect(pathsOf(container).map(({ opacity }) => opacity)).toEqual(["0.3", null]);
+  });
+
+  it("still draws an opaque icon as exactly one <path> with no fill-opacity", () => {
+    const { container } = track(mount(<FillMorph icon={SQUARE} progress={0} to={SQUARE} />));
+    expect(pathsOf(container)).toEqual([{ d: dOf(SQUARE), opacity: null }]);
+  });
+
+  it("fades the layers through a controlled morph to an opaque icon, ending on one <path>", () => {
+    const tree = track(mount(<FillMorph icon={TWO_TONE} to={CIRCLE} progress={0.5} />));
+    const expected = renderLayers(interpolate(contoursOf(TWO_TONE), contoursOf(CIRCLE), 0.5));
+    expect(pathsOf(tree.container).map(({ d }) => d)).toEqual(expected.map(({ d }) => d));
+    tree.render(<FillMorph icon={TWO_TONE} to={CIRCLE} progress={1} />);
+    expect(pathsOf(tree.container)).toHaveLength(1);
+  });
+
+  it("animates a two-tone element icon in uncontrolled mode and settles on its layers", () => {
+    const tree = track(mount(<FillMorph icon={SQUARE} springConfig={CONFIG} />));
+    tree.render(<FillMorph icon={<MdSignalWifi1Bar />} springConfig={CONFIG} />);
+    runUntilIdle();
+    expect(pathsOf(tree.container).map(({ opacity }) => opacity)).toEqual(["0.3", null]);
   });
 });

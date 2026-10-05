@@ -10,7 +10,8 @@ import {
 import { Circle as LucideCircle, Heart as LucideHeart } from "lucide-react";
 import { type ReactElement, type RefObject, StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { IconBaseProps } from "react-icons";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { IconBaseProps, IconType } from "react-icons";
 import {
   FaB,
   FaBullseye,
@@ -23,7 +24,23 @@ import {
   FaRegStar,
   FaUser,
 } from "react-icons/fa6";
-import { MdFavorite } from "react-icons/md";
+import { BiLogoJquery } from "react-icons/bi";
+import { FaDragon } from "react-icons/fa6";
+import { IoPeopleCircle } from "react-icons/io5";
+import {
+  MdFavorite,
+  MdImagesearchRoller,
+  MdSignalWifi1Bar,
+  MdSignalWifi1BarLock,
+  MdSignalWifi2Bar,
+  MdSignalWifi2BarLock,
+  MdSignalWifi3Bar,
+  MdSignalWifi3BarLock,
+  MdSignalWifi4Bar,
+  MdWifiCalling1,
+  MdWifiCalling2,
+} from "react-icons/md";
+import { RiBlenderFill } from "react-icons/ri";
 import type { FixtureName } from "../../harness/fixtures.ts";
 import { REFERENCE_PAIRS } from "../../harness/pairs.ts";
 import { FIXTURE_LIST, FIXTURES } from "./fixtures.ts";
@@ -499,6 +516,168 @@ const BugFixSection = (): ReactElement => {
   );
 };
 
+const TWO_TONE_ICONS: [string, IconType][] = [
+  ["MdSignalWifi1Bar", MdSignalWifi1Bar],
+  ["MdSignalWifi1BarLock", MdSignalWifi1BarLock],
+  ["MdSignalWifi2Bar", MdSignalWifi2Bar],
+  ["MdSignalWifi2BarLock", MdSignalWifi2BarLock],
+  ["MdSignalWifi3Bar", MdSignalWifi3Bar],
+  ["MdSignalWifi3BarLock", MdSignalWifi3BarLock],
+  ["MdWifiCalling1", MdWifiCalling1],
+  ["MdWifiCalling2", MdWifiCalling2],
+];
+
+const LENIENT_ICONS: [string, IconType, string][] = [
+  ["FaDragon", FaDragon, "one zero-area subpath"],
+  ["IoPeopleCircle", IoPeopleCircle, "a path of zero-area subpaths"],
+  ["MdImagesearchRoller", MdImagesearchRoller, "an open subpath with area"],
+  ["BiLogoJquery", BiLogoJquery, "three open paths"],
+  ["RiBlenderFill", RiBlenderFill, "outlines drawn twice"],
+];
+
+const square = (inset: number, isReversed = false): string => {
+  const [a, b] = [inset, 24 - inset];
+  return isReversed ? `M${a} ${a}V${b}H${b}V${a}Z` : `M${a} ${a}H${b}V${b}H${a}Z`;
+};
+const synthetic = (body: string): string =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${body}</svg>`;
+
+/** Hand-made hole-direction cases: each should look exactly like its browser render. */
+const HOLE_CASES: [string, string][] = [
+  ["nonzero, inner wound the same way: solid", synthetic(`<path d="${square(2)} ${square(7)}"/>`)],
+  [
+    "nonzero, inner wound the opposite way: hole",
+    synthetic(`<path d="${square(2)} ${square(7, true)}"/>`),
+  ],
+  [
+    "evenodd, four nested same-way squares: ring, square, ring",
+    synthetic(
+      `<path fill-rule="evenodd" d="${square(2)} ${square(5)} ${square(8)} ${square(10)}"/>`,
+    ),
+  ],
+  [
+    "a small path stacked on a big one: solid",
+    synthetic(`<path d="${square(2)}"/><path d="${square(7)}"/>`),
+  ],
+  [
+    "a separate path inside another's hole: a dot in a ring",
+    synthetic(`<path d="${square(2)} ${square(5, true)}"/><path d="${square(9)}"/>`),
+  ],
+  [
+    "two-tone: a faded path under an opaque one",
+    synthetic(`<path fill-opacity=".3" d="${square(2)}"/><path d="${square(7)}"/>`),
+  ],
+];
+
+/** The browser's own render of `markup`, black on the page, for side-by-side comparison. */
+const BrowserRender = ({ markup, size }: { markup: string; size: number }): ReactElement => {
+  return (
+    <img
+      src={`data:image/svg+xml,${encodeURIComponent(markup)}`}
+      width={size}
+      height={size}
+      alt="the browser's own render"
+    />
+  );
+};
+
+const Comparison = ({ title, markup }: { title: string; markup: string }): ReactElement => {
+  return (
+    <figure>
+      <BrowserRender markup={markup} size={96} />
+      <FillMorph icon={markup} width={96} height={96} aria-label={`${title} (fillmorph)`} />
+      <figcaption>{title}</figcaption>
+    </figure>
+  );
+};
+
+const TWO_TONE_SEQUENCE: IconType[] = [
+  MdSignalWifi1Bar,
+  MdSignalWifi2Bar,
+  MdSignalWifi3Bar,
+  MdSignalWifi4Bar,
+  MdWifiCalling1,
+];
+
+/** Spec 11's by-eye checks (0.3.0): holes as browsers fill them, translucent layers, lenient subpaths. */
+const HoleSection = (): ReactElement => {
+  const [step, setStep] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const Current = TWO_TONE_SEQUENCE[step % TWO_TONE_SEQUENCE.length] as IconType;
+  return (
+    <section>
+      <h2>Holes, fill-rule and opacity (spec 11, 0.3.0)</h2>
+      <p>
+        Each pair: the browser&apos;s own render of the icon (left), then{" "}
+        <code>{"<FillMorph>"}</code> (right). Look for: every pair identical, including the faded
+        parts.
+      </p>
+      <h3>Two-tone Material Design icons</h3>
+      <p>
+        Spec 10&apos;s list. In 0.2.2 the opaque top shape was cut out of the background as a hole,
+        and the faded background drew fully opaque.
+      </p>
+      <div className="buttons">
+        {TWO_TONE_ICONS.map(([name, Icon]) => (
+          <Comparison key={name} title={name} markup={renderToStaticMarkup(<Icon />)} />
+        ))}
+      </div>
+      <h3>Hole direction (synthetic)</h3>
+      <div className="buttons">
+        {HOLE_CASES.map(([title, markup]) => (
+          <Comparison key={title} title={title} markup={markup} />
+        ))}
+      </div>
+      <h3>One bad subpath no longer rejects the icon</h3>
+      <p>
+        All five were rejected by 0.2.2. Open subpaths are filled as if closed, as browsers fill
+        them; zero-area ones are skipped.
+      </p>
+      <div className="buttons">
+        {LENIENT_ICONS.map(([name, Icon, why]) => (
+          <Comparison
+            key={name}
+            title={`${name}: ${why}`}
+            markup={renderToStaticMarkup(<Icon />)}
+          />
+        ))}
+      </div>
+      <h3>Morphing translucent layers</h3>
+      <p>
+        Uncontrolled: each click springs to the next icon. Look for: the faded layer fading in and
+        out smoothly, never flashing opaque, and no hole appearing where the top shape is.
+      </p>
+      <FillMorph icon={<Current />} width={SIZE} height={SIZE} aria-label="Two-tone morph" />
+      <div className="buttons">
+        <button type="button" onClick={() => setStep((current) => current + 1)}>
+          next ({TWO_TONE_SEQUENCE.length} icons, cycling)
+        </button>
+      </div>
+      <p>Controlled: MdSignalWifi1Bar (faded background) → solid heart.</p>
+      <FillMorph
+        icon={<MdSignalWifi1Bar />}
+        to={FIXTURES["fa-solid-heart"]}
+        progress={progress}
+        width={SIZE}
+        height={SIZE}
+        aria-label="Two-tone to opaque, controlled"
+      />
+      <div className="controls">
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={progress}
+          onChange={(event) => setProgress(Number(event.target.value))}
+          aria-label="Two-tone progress"
+        />
+        <span>{progress.toFixed(2)}</span>
+      </div>
+    </section>
+  );
+};
+
 const App = (): ReactElement => {
   const controlledRef = useRef<FillMorphHandle>(null);
   return (
@@ -508,6 +687,7 @@ const App = (): ReactElement => {
       <ImperativeSection controlledRef={controlledRef} />
       <ElementSection />
       <BugFixSection />
+      <HoleSection />
     </>
   );
 };

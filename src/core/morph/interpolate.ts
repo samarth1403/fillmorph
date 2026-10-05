@@ -24,6 +24,9 @@ export type ContourCorrespondence = {
   depth: number;
   fromPoints: Point[];
   toPoints: Point[];
+  /** The contour's `opacity` (1 when absent) at each end: a matched pair's two, else its own. */
+  fromOpacity: number;
+  toOpacity: number;
   /**
    * Set on an unmatched contour that has an ancestor with a partner; `null` on matched contours
    * and on unmatched ones with no partnered ancestor, whose placeholder stays at their own fixed
@@ -76,7 +79,10 @@ export function correspondContours(
   const appearingOrMatched = to.map((target) => {
     const partner = partnerOfTo.get(target.id);
     if (partner !== undefined) {
-      return correspond(target, target.id, target.parentId, partner.points, target.points, null);
+      return correspond(target, target.id, target.parentId, partner.points, target.points, null, {
+        from: opacityOf(partner),
+        to: opacityOf(target),
+      });
     }
     // A matched `to` ancestor's output id is its own id.
     const ancestor = nearestPartneredAncestor(target, toById, (id) => partnerOfTo.has(id));
@@ -126,6 +132,7 @@ function correspond(
   fromPoints: readonly Point[],
   toPoints: readonly Point[],
   anchor: CollapseAnchor | null,
+  opacity = { from: opacityOf(structure), to: opacityOf(structure) },
 ): ContourCorrespondence {
   return {
     id,
@@ -133,8 +140,14 @@ function correspond(
     isHole: structure.isHole,
     depth: structure.depth,
     ...pairByArcLength(fromPoints, toPoints),
+    fromOpacity: opacity.from,
+    toOpacity: opacity.to,
     anchor,
   };
+}
+
+function opacityOf(contour: Contour): number {
+  return contour.opacity ?? 1;
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -178,6 +191,9 @@ function lerpPoints(from: readonly Point[], to: readonly Point[], t: number): Po
  *   vertex is present at its exact position, in order (a `to` contour may start at a different
  *   index), and extra points lie on its edges. Disappearing contours are
  *   still present as zero-area point contours, so a hole's id never vanishes mid-sequence.
+ * - **Opacity** (spec 11): a matched contour's `opacity` fades linearly between its two ends,
+ *   clamped to 0…1; an appearing or disappearing one keeps its own. Fully opaque contours carry no
+ *   `opacity` field, as in `parseIcon`'s output.
  */
 export function interpolate(from: Contour[], to: Contour[], progress: number): Contour[] {
   if (!Number.isFinite(progress)) {
@@ -214,12 +230,15 @@ export function interpolate(from: Contour[], to: Contour[], progress: number): C
           ? lerpPoints(collapsed, pair.toPoints, progress)
           : lerpPoints(pair.fromPoints, collapsed, progress);
     }
-    return {
+    const contour: Contour = {
       id: pair.id,
       parentId: pair.parentId,
       isHole: pair.isHole,
       depth: pair.depth,
       points: points as Point[],
     };
+    // Clamped, since a spring's overshoot extrapolates progress past 0…1.
+    const opacity = Math.min(1, Math.max(0, lerp(pair.fromOpacity, pair.toOpacity, progress)));
+    return opacity === 1 ? contour : { ...contour, opacity };
   });
 }

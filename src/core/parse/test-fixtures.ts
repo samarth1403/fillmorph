@@ -100,16 +100,25 @@ export const CUSTOM_TWO_HOLES = `<svg xmlns="http://www.w3.org/2000/svg" viewBox
   <path fill-rule="evenodd" d="M0 0H40V60H0Z M10 8H30V26H10Z M10 34H30V52H10Z"/>
 </svg>`;
 
+// Subpaths a browser fills leniently (spec 11 #2): accepted, drawn the way a browser draws them.
+
+/** Its second subpath has no "Z"; browsers fill it as if closed, and evenodd makes it a hole. */
+export const OPEN_SUBPATH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path fill-rule="evenodd" d="M2 2H22V22H2Z M6 6 L18 6 L18 18"/>
+</svg>`;
+
+/** Its second subpath is a straight line, enclosing no area, so it draws nothing. */
+export const DEGENERATE_SUBPATH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path d="M2 2H22V22H2Z M4 12 L12 12 L20 12 Z"/>
+</svg>`;
+
 // Deliberately broken.
 
 export const BROKEN_MALFORMED_XML = `<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0H10V10Z"></svg>`;
 
-export const BROKEN_OPEN_SUBPATH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <path d="M2 2H22V22H2Z M6 6 L18 6 L18 18"/>
-</svg>`;
-
-export const BROKEN_DEGENERATE_SUBPATH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <path d="M2 2H22V22H2Z M4 12 L12 12 L20 12 Z"/>
+/** Every subpath is a point or a straight line: nothing at all to draw. */
+export const BROKEN_NO_AREA = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path d="M4 12 L12 12 L20 12 Z M5 5Z"/><path d="M2 2 L22 22"/>
 </svg>`;
 
 // Stylesheet-styled stroke icons (custom, modeled on Adobe Illustrator's "Presentation
@@ -135,3 +144,26 @@ export const ILLUSTRATOR_STYLESHEET_STROKE = `<?xml version="1.0" encoding="UTF-
   <path class="cls-1" d="M12 3 21 12 12 21 3 12Z"/>
 </svg>
 `;
+
+/**
+ * Spec 10's two-tone repro list, exactly as `react-icons` 5.7.0 renders them: a solid shape over a
+ * faded (`fill-opacity`/`opacity` .3) copy of the icon, as separate overlapping paths.
+ */
+export const MD_TWO_TONE: Readonly<Record<string, string>> = {
+  MdSignalWifi1Bar:
+    '<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 24 24" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><path fill="none" d="M0 0h24v24H0z"></path><path fill-opacity=".3" d="M12.01 21.49 23.64 7c-.45-.34-4.93-4-11.64-4C5.28 3 .81 6.66.36 7l11.63 14.49.01.01z"></path><path d="M6.67 14.86 12 21.49v.01l.01-.01 5.33-6.63C17.06 14.65 15.03 13 12 13s-5.06 1.65-5.33 1.86"></path></svg>',
+  MdSignalWifi1BarLock:
+    '<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 24 24" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><path fill="none" d="M0 0h24v24H0z"></path><path fill-opacity=".3" d="M15.5 14.5c0-2.8 2.2-5 5-5 .36 0 .71.04 1.05.11L23.64 7c-.45-.34-4.93-4-11.64-4C5.28 3 .81 6.66.36 7L12 21.5l3.5-4.36z"></path><path d="M15.5 14.5c0-.23.04-.46.07-.68-.92-.43-2.14-.82-3.57-.82-3 0-5.1 1.7-5.3 1.9l5.3 6.6 3.5-4.36zM23 16v-1.5c0-1.4-1.1-2.5-2.5-2.5S18 13.1 18 14.5V16c-.5 0-1 .5-1 1v4c0 .5.5 1 1 1h5c.5 0 1-.5 1-1v-4c0-.5-.5-1-1-1m-1 0h-3v-1.5c0-.8.7-1.5 1.5-1.5s1.5.7 1.5 1.5z"></path></svg>',
+  MdSignalWifi2Bar:
+    '<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 24 24" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><path fill="none" d="M0 0h24v24H0z"></path><path fill-opacity=".3" d="M23.64 7c-.45-.34-4.93-4-11.64-4C5.28 3 .81 6.66.36 7L12 21.5z"></path><path d="M4.79 12.52 12 21.5l7.21-8.99C18.85 12.24 16.1 10 12 10s-6.85 2.24-7.21 2.52"></path></svg>',
+  MdSignalWifi2BarLock:
+    '<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 24 24" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><path fill="none" d="M0 0h24v24H0z"></path><path fill-opacity=".3" d="M15.5 14.5c0-2.8 2.2-5 5-5 .36 0 .71.04 1.05.11L23.64 7c-.45-.34-4.93-4-11.64-4C5.28 3 .81 6.66.36 7L12 21.5l3.5-4.36z"></path><path d="M15.5 14.5c0-1.34.51-2.53 1.34-3.42C15.62 10.51 13.98 10 12 10c-4.1 0-6.8 2.2-7.2 2.5l7.2 9 3.5-4.38zM23 16v-1.5c0-1.4-1.1-2.5-2.5-2.5S18 13.1 18 14.5V16c-.5 0-1 .5-1 1v4c0 .5.5 1 1 1h5c.5 0 1-.5 1-1v-4c0-.5-.5-1-1-1m-1 0h-3v-1.5c0-.8.7-1.5 1.5-1.5s1.5.7 1.5 1.5z"></path></svg>',
+  MdSignalWifi3Bar:
+    '<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 24 24" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><path fill="none" d="M0 0h24v24H0z"></path><path fill-opacity=".3" d="M23.64 7c-.45-.34-4.93-4-11.64-4C5.28 3 .81 6.66.36 7L12 21.5z"></path><path d="M3.53 10.95 12 21.5l8.47-10.55C20.04 10.62 16.81 8 12 8s-8.04 2.62-8.47 2.95"></path></svg>',
+  MdSignalWifi3BarLock:
+    '<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 24 24" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><path fill="none" d="M0 0h24v24H0z"></path><path fill-opacity=".3" d="M15.5 14.5c0-2.8 2.2-5 5-5 .36 0 .71.04 1.05.11L23.64 7c-.45-.34-4.93-4-11.64-4C5.28 3 .81 6.66.36 7L12 21.5l3.5-4.36z"></path><path d="M23 16v-1.5c0-1.4-1.1-2.5-2.5-2.5S18 13.1 18 14.5V16c-.5 0-1 .5-1 1v4c0 .5.5 1 1 1h5c.5 0 1-.5 1-1v-4c0-.5-.5-1-1-1m-1 0h-3v-1.5c0-.8.7-1.5 1.5-1.5s1.5.7 1.5 1.5zm-6.5-1.5a4.92 4.92 0 0 1 3.27-4.68C17.29 8.98 14.94 8 12 8c-4.81 0-8.04 2.62-8.47 2.95L12 21.5l3.5-4.36z"></path></svg>',
+  MdWifiCalling1:
+    '<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 24 24" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><path fill="none" d="M0 0h24v24H0z"></path><path fill-opacity=".3" d="M16.49 4.5c1.79 0 3.42.73 4.59 1.91l1.06-1.06A7.94 7.94 0 0 0 16.49 3c-2.21 0-4.21.9-5.66 2.34l1.06 1.06a6.55 6.55 0 0 1 4.6-1.9"></path><path fill-opacity=".3" d="M16.49 6c-1.38 0-2.63.56-3.54 1.46l1.06 1.06c.63-.63 1.51-1.03 2.47-1.03s1.84.39 2.47 1.03l1.06-1.06A4.94 4.94 0 0 0 16.49 6"></path><path d="M16.49 9c-.55 0-1.05.22-1.41.59L16.49 11l1.41-1.41c-.36-.37-.86-.59-1.41-.59"></path><path d="M15 17.83c1.29.54 2.63.89 4 1.07v-2.23l-2.35-.47zM7.33 5H5.1c.18 1.37.53 2.7 1.07 4L7.8 7.35z" opacity=".3"></path><path d="m20.2 14.87-3.67-.73c-.5-.1-.83.2-.9.27l-2.52 2.5c-2.5-1.43-4.57-3.5-6-6l2.5-2.52c.23-.24.33-.57.27-.9L9.13 3.8c-.09-.46-.5-.8-.98-.8H4c-.56 0-1.03.47-1 1.03.17 2.89 1.05 5.6 2.43 7.97 1.58 2.73 3.85 4.99 6.57 6.57 2.37 1.37 5.08 2.26 7.97 2.43.55.03 1.03-.43 1.03-1v-4.15c0-.48-.34-.89-.8-.98M5.1 5h2.23l.47 2.35L6.17 9c-.54-1.3-.9-2.63-1.07-4M19 18.9c-1.37-.18-2.7-.53-4-1.07l1.65-1.63 2.35.47z"></path></svg>',
+  MdWifiCalling2:
+    '<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 24 24" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><path fill="none" d="M0 0h24v24H0z"></path><path fill-opacity=".3" d="M16.49 4.5c1.79 0 3.42.73 4.59 1.91l1.06-1.06A7.94 7.94 0 0 0 16.49 3c-2.21 0-4.21.9-5.66 2.34l1.06 1.06a6.55 6.55 0 0 1 4.6-1.9"></path><path d="M16.49 6c-1.38 0-2.63.56-3.54 1.46l1.06 1.06c.63-.63 1.51-1.03 2.47-1.03s1.84.39 2.47 1.03l1.06-1.06A4.94 4.94 0 0 0 16.49 6M16.49 9c-.55 0-1.05.22-1.41.59L16.49 11l1.41-1.41c-.36-.37-.86-.59-1.41-.59"></path><path d="M15 17.83c1.29.54 2.63.89 4 1.07v-2.23l-2.35-.47zM7.33 5H5.1c.18 1.37.53 2.7 1.07 4L7.8 7.35z" opacity=".3"></path><path d="m20.2 14.87-3.67-.73c-.5-.1-.83.2-.9.27l-2.52 2.5c-2.5-1.43-4.57-3.5-6-6l2.5-2.52c.23-.24.33-.57.27-.9L9.13 3.8c-.09-.46-.5-.8-.98-.8H4c-.56 0-1.03.47-1 1.03.17 2.89 1.05 5.6 2.43 7.97 1.58 2.73 3.85 4.99 6.57 6.57 2.37 1.37 5.08 2.26 7.97 2.43.55.03 1.03-.43 1.03-1v-4.15c0-.48-.34-.89-.8-.98M5.1 5h2.23l.47 2.35L6.17 9c-.54-1.3-.9-2.63-1.07-4M19 18.9c-1.37-.18-2.7-.53-4-1.07l1.65-1.63 2.35.47z"></path></svg>',
+};

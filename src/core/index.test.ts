@@ -17,6 +17,7 @@ describe("fillmorph (core)", () => {
       "interpolate",
       "parseIcon",
       "renderContours",
+      "renderLayers",
       "retargetMorph",
       "startMorph",
       "stepSpring",

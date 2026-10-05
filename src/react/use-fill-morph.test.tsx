@@ -26,9 +26,9 @@ import {
 import { type UseFillMorphResult, useFillMorph } from "./use-fill-morph";
 
 const CONFIG: SpringConfig = { stiffness: 170, damping: 26, mass: 1 };
-/** A well-formed SVG whose path never closes: a `FillmorphParseError`. */
-const OPEN_PATH =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 4H20V20"/></svg>';
+/** A well-formed SVG whose only path is a straight line, enclosing no area: a `FillmorphParseError`. */
+const NO_AREA_PATH =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 4H20"/></svg>';
 
 let frames: FakeFrames;
 let now = 0;
@@ -107,7 +107,7 @@ describe("useFillMorph", () => {
     const tree = mount(<Probe icon={SQUARE} results={results} />);
     runUntilIdle();
     const square = results.at(-1)?.contours;
-    tree.render(<Probe icon={OPEN_PATH} results={results} />);
+    tree.render(<Probe icon={NO_AREA_PATH} results={results} />);
     runUntilIdle();
     expect(results.at(-1)?.error).toBeInstanceOf(FillmorphParseError);
     expect(results.at(-1)?.contours).toBe(square);
@@ -119,7 +119,7 @@ describe("useFillMorph", () => {
 
   it("returns no contours and the error when the very first icon is rejected", () => {
     const results: UseFillMorphResult[] = [];
-    const tree = mount(<Probe icon={OPEN_PATH} results={results} />);
+    const tree = mount(<Probe icon={NO_AREA_PATH} results={results} />);
     expect(results.at(-1)?.contours).toEqual([]);
     expect(results.at(-1)?.error).toBeInstanceOf(FillmorphParseError);
     expect(frames.pendingCount()).toBe(0);

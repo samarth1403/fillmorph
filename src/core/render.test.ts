@@ -10,7 +10,7 @@ import {
   FA_SOLID_BULLSEYE,
   FA_SOLID_HEART,
 } from "./parse/test-fixtures";
-import { renderContours } from "./render";
+import { renderContours, renderLayers } from "./render";
 
 function contour(
   id: string,
@@ -126,5 +126,56 @@ describe("renderContours", () => {
         }
       });
     }
+  });
+});
+
+describe("renderLayers", () => {
+  const square = (id: string, x: number, opacity?: number): Contour => ({
+    ...contour(id, null, 0, [
+      [x, 0],
+      [x, 10],
+      [x + 10, 10],
+      [x + 10, 0],
+    ]),
+    ...(opacity === undefined ? {} : { opacity }),
+  });
+
+  it("gives an all-opaque icon exactly one layer, equal to renderContours", () => {
+    for (const markup of [FA_SOLID_HEART, FA_REGULAR_CIRCLE, CUSTOM_BULLSEYE]) {
+      const { contours } = parseIcon(markup);
+      expect(renderLayers(contours)).toEqual([{ d: renderContours(contours), opacity: 1 }]);
+    }
+  });
+
+  it("returns no layers for no contours", () => {
+    expect(renderLayers([])).toEqual([]);
+  });
+
+  it("puts each distinct opacity in its own layer, ordered by first appearance", () => {
+    const contours = [square("a", 0, 0.3), square("b", 20), square("c", 40, 0.3)];
+    expect(renderLayers(contours)).toEqual([
+      { d: renderContours([contours[0] as Contour, contours[2] as Contour]), opacity: 0.3 },
+      { d: renderContours([contours[1] as Contour]), opacity: 1 },
+    ]);
+  });
+
+  it("draws a hole in its parent's layer, so it always cuts the shape it belongs to", () => {
+    const outer = square("o", 0, 0.5);
+    const hole: Contour = {
+      ...contour("h", "o", 1, [
+        [2, 2],
+        [8, 2],
+        [8, 8],
+        [2, 8],
+      ]),
+      opacity: 0.9,
+    };
+    expect(renderLayers([outer, hole])).toEqual([
+      { d: renderContours([outer, hole]), opacity: 0.5 },
+    ]);
+  });
+
+  it("groups opacities that differ only by float noise", () => {
+    expect(renderLayers([square("a", 0, 0.3), square("b", 20, 0.1 + 0.2)])).toHaveLength(1);
   });
 });

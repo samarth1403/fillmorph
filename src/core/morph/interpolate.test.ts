@@ -380,3 +380,44 @@ describe("interpolate - graceful degradation (deliverable #2)", () => {
     }
   });
 });
+
+describe("interpolate - opacity (spec 11)", () => {
+  const faded = (id: string, x: number, opacity?: number): Contour => ({
+    ...contour(id, null, 0, rectangle(x, 0, 10, 10)),
+    ...(opacity === undefined ? {} : { opacity }),
+  });
+
+  it("fades a matched contour's opacity linearly, exactly each end at 0 and 1", () => {
+    const from = [faded("a", 0, 0.3)];
+    const to = [faded("a", 0)];
+    expect(interpolate(from, to, 0)[0]?.opacity).toBe(0.3);
+    expect(interpolate(from, to, 0.5)[0]?.opacity).toBeCloseTo(0.65, 12);
+    expect(interpolate(from, to, 1)[0]).not.toHaveProperty("opacity");
+  });
+
+  it("clamps opacity to 0…1 when progress extrapolates (a spring's overshoot)", () => {
+    const from = [faded("a", 0, 0.3)];
+    const to = [faded("a", 0, 0.8)];
+    // Past 1 it would be 1.05: clamped to fully opaque, which carries no field.
+    expect(interpolate(from, to, 1.5)[0]).not.toHaveProperty("opacity");
+    expect(interpolate(from, to, -1)[0]?.opacity).toBe(0);
+  });
+
+  it("keeps an appearing or disappearing contour's own opacity throughout", () => {
+    const one = [faded("a", 0)];
+    const two = [faded("a", 0), faded("extra", 60, 0.4)];
+    for (const progress of [0, 0.5, 1]) {
+      const appearing = interpolate(one, two, progress);
+      const disappearing = interpolate(two, one, progress);
+      expect(appearing.find((c) => c.id === "extra")?.opacity).toBe(0.4);
+      expect(disappearing.find((c) => c.id === "extra")?.opacity).toBe(0.4);
+      expect(appearing.find((c) => c.id === "a")).not.toHaveProperty("opacity");
+    }
+  });
+
+  it("leaves opaque icons' output without an opacity field", () => {
+    const from = parseIcon(FA_SOLID_HEART).contours;
+    const to = parseIcon(FA_REGULAR_CIRCLE).contours;
+    for (const contour of interpolate(from, to, 0.5)) expect(contour).not.toHaveProperty("opacity");
+  });
+});
