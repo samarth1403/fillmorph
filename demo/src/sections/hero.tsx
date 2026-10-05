@@ -40,8 +40,10 @@ const POOL: readonly DemoIcon[] = [
 ].map(findIcon);
 const TILES = 25;
 /** Each tile loops through three icons, 7 and 14 places along the pool, so neighbors differ. */
-const LOOPS: readonly (readonly DemoIcon[])[] = Array.from({ length: TILES }, (_, tile) =>
-  [0, 7, 14].map((offset) => POOL[(tile + offset) % POOL.length] as DemoIcon),
+const LOOPS: readonly (readonly DemoIcon[])[] = Array.from(
+  { length: TILES },
+  (_, tile) =>
+    [0, 7, 14].map((offset) => POOL[(tile + offset) % POOL.length] as DemoIcon),
 );
 /**
  * Each tile rests about 1.8 s on a settled icon (the default spring takes about 0.8 s), and one
@@ -49,10 +51,15 @@ const LOOPS: readonly (readonly DemoIcon[])[] = Array.from({ length: TILES }, (_
  */
 const HOLD_MS = 2600;
 /** The order tiles take their turns in: a fixed scatter, so the ripple doesn't sweep row by row. */
-const TURN_ORDER = Array.from({ length: TILES }, (_, index) => (index * 11) % TILES);
+const TURN_ORDER = Array.from(
+  { length: TILES },
+  (_, index) => (index * 11) % TILES,
+);
 
 const HeroGrid = (): ReactElement => {
-  const [steps, setSteps] = useState<readonly number[]>(() => Array(TILES).fill(0));
+  const [steps, setSteps] = useState<readonly number[]>(() =>
+    Array(TILES).fill(0),
+  );
   // Turn bookkeeping lives in a ref, not state: it isn't rendered, and an updater with side
   // effects would run twice under StrictMode.
   const turnRef = useRef(0);
@@ -65,16 +72,23 @@ const HeroGrid = (): ReactElement => {
     const tile = TURN_ORDER[turnRef.current % TILES] as number;
     turnRef.current += 1;
     if (tile === pausedRef.current) return;
-    setSteps((all) => all.map((step, index) => (index === tile ? step + 1 : step)));
+    setSteps((all) =>
+      all.map((step, index) => (index === tile ? step + 1 : step)),
+    );
   }, []);
   useAmbientTimer(advance, HOLD_MS / TILES);
   // A click morphs the tile at once, out of turn, like a click on the icon wall; the ticker
   // carries on from there. It works while hovered (the pause only stops the ticker).
   const morphNow = (tile: number) =>
-    setSteps((all) => all.map((step, index) => (index === tile ? step + 1 : step)));
+    setSteps((all) =>
+      all.map((step, index) => (index === tile ? step + 1 : step)),
+    );
   return (
     <div className="relative w-full max-w-md justify-self-center lg:max-w-none lg:justify-self-stretch">
-      <div aria-hidden="true" className="hero-glow absolute inset-0 -z-10 rounded-full blur-3xl" />
+      <div
+        aria-hidden="true"
+        className="hero-glow absolute inset-0 -z-10 rounded-full blur-3xl"
+      />
       <ul
         className={`grid-cols-5 ${TILE_FRAME}`}
         aria-label="25 icons, each continuously morphing between everyday icons"
@@ -87,7 +101,9 @@ const HeroGrid = (): ReactElement => {
               // biome-ignore lint/suspicious/noArrayIndexKey: tiles never reorder.
               key={tile}
               onPointerEnter={() => setPausedTile(tile)}
-              onPointerLeave={() => setPausedTile((current) => (current === tile ? null : current))}
+              onPointerLeave={() =>
+                setPausedTile((current) => (current === tile ? null : current))
+              }
               className={TILE_CELL}
             >
               <button
@@ -97,7 +113,11 @@ const HeroGrid = (): ReactElement => {
                 onClick={() => morphNow(tile)}
                 className={TILE_BUTTON}
               >
-                <Morph icon={icon.markup} spring={HERO_SPRING} className="size-7" />
+                <Morph
+                  icon={icon.markup}
+                  spring={HERO_SPRING}
+                  className="size-7"
+                />
               </button>
             </li>
           );
@@ -117,7 +137,7 @@ const HeroGrid = (): ReactElement => {
  */
 export const Hero = (): ReactElement => {
   return (
-    <section className="relative overflow-hidden">
+    <section className="relative overflow-hidden mt-6 lg:mt-8">
       <div
         aria-hidden="true"
         className="hero-backdrop pointer-events-none absolute inset-x-0 top-0 -z-10 h-[38rem]"
@@ -135,8 +155,9 @@ export const Hero = (): ReactElement => {
             </span>
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-neutral-600 dark:text-neutral-400">
-            fillmorph turns any filled SVG icon into another (solid shapes, outlines, rings and
-            cutouts) with real spring physics. No crossfade, no icon swap.
+            fillmorph turns any filled SVG icon into another (solid shapes,
+            outlines, rings and cutouts) with real spring physics. No crossfade,
+            no icon swap.
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-3">
             <a

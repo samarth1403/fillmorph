@@ -1,4 +1,6 @@
 import type { ReactElement } from "react";
+import githubMark from "../assets/fa-brands-github.svg?raw";
+import npmMark from "../assets/fa-brands-npm.svg?raw";
 import { Morph } from "../morph";
 import { SPRING_PRESETS } from "../presets";
 import { MOON_ICON, SUN_ICON } from "../ui-icons";
@@ -15,8 +17,20 @@ const LINKS = [
 ];
 
 /**
- * Sticky top bar: the static flame brand mark (the favicon's file), section links, and the theme
- * toggle, whose icon morphs sun ↔ moon (a vetted pair, `demo/ui-pairs/theme`).
+ * Font Awesome Free brand icons (CC BY 4.0), used as FA's license allows: to represent the product
+ * they refer to (this repo on GitHub, this package on npm).
+ */
+const EXTERNAL_LINKS = [
+  { href: "https://github.com/samarth1403/fillmorph", label: "GitHub", markup: githubMark },
+  { href: "https://www.npmjs.com/package/fillmorph", label: "npm", markup: npmMark },
+];
+
+const ROUND_BUTTON =
+  "grid size-9 cursor-pointer place-items-center rounded-full border border-neutral-200 text-neutral-700 transition-colors hover:border-orange-400 hover:text-orange-600 dark:border-white/10 dark:text-neutral-200 dark:hover:border-orange-400/60 dark:hover:text-orange-400";
+
+/**
+ * Sticky top bar: the static flame brand mark (the favicon's file), section links, GitHub and npm
+ * links, and the theme toggle, whose icon morphs sun ↔ moon (a vetted pair, `demo/ui-pairs/theme`).
  */
 export const Nav = (): ReactElement => {
   const { theme, toggleTheme } = useTheme();
@@ -42,12 +56,32 @@ export const Nav = (): ReactElement => {
               </a>
             ))}
           </nav>
+          <div className="ml-2 flex items-center gap-2">
+            {EXTERNAL_LINKS.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`fillmorph on ${link.label}`}
+                className={ROUND_BUTTON}
+              >
+                <span className="sr-only">fillmorph on {link.label}</span>
+                <span
+                  aria-hidden="true"
+                  className="size-4 [&_svg]:size-full [&_svg]:fill-current"
+                  // biome-ignore lint/security/noDangerouslySetInnerHtml: our own vendored, static Font Awesome brand file.
+                  dangerouslySetInnerHTML={{ __html: link.markup }}
+                />
+              </a>
+            ))}
+          </div>
           <button
             type="button"
             onClick={toggleTheme}
             aria-label={`Switch to ${next} theme`}
             title={`Switch to ${next} theme`}
-            className="ml-2 grid size-9 cursor-pointer place-items-center rounded-full border border-neutral-200 text-neutral-700 transition-colors hover:border-orange-400 hover:text-orange-600 dark:border-white/10 dark:text-neutral-200 dark:hover:border-orange-400/60 dark:hover:text-orange-400"
+            className={`ml-2 ${ROUND_BUTTON}`}
           >
             <Morph
               icon={theme === "dark" ? SUN_ICON : MOON_ICON}
