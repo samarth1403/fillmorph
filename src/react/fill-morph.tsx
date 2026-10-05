@@ -144,9 +144,11 @@ const MorphSvg = ({
   iconSvgProps: IconSvgProps | null;
 }): ReactElement => {
   const layers = renderLayers(contours);
+  const rootProps = mergeSvgProps(iconSvgProps, svgProps);
+  const rootOpacity = rootFillOpacity(rootProps);
   return (
     // biome-ignore lint/a11y/noSvgWithoutTitle: the caller names it (or hides it) via passthrough `aria-*`/`role` props
-    <svg overflow="visible" {...mergeSvgProps(iconSvgProps, svgProps)} viewBox={VIEW_BOX}>
+    <svg overflow="visible" {...rootProps} viewBox={VIEW_BOX}>
       {layers.length <= 1 && (layers[0]?.opacity ?? 1) === 1 ? (
         <path d={layers[0]?.d ?? ""} />
       ) : (
@@ -155,13 +157,36 @@ const MorphSvg = ({
             // biome-ignore lint/suspicious/noArrayIndexKey: layers have no identity beyond their position; a re-keyed <path> just gets a new d
             key={index}
             d={layer.d}
-            fillOpacity={layer.opacity === 1 ? undefined : layer.opacity}
+            fillOpacity={
+              layer.opacity === 1 ? undefined : Math.round(layer.opacity * rootOpacity * 1e6) / 1e6
+            }
           />
         ))
       )}
     </svg>
   );
 };
+
+/**
+ * The root `<svg>`'s own `fill-opacity` (spec 13 #2), in [0, 1]: inline `style` over the attribute,
+ * as CSS does, whether passed to `<FillMorph>` or forwarded from an element icon. A translucent
+ * layer's `fill-opacity` replaces the inherited root value instead of combining with it, so the
+ * layer multiplies it in itself (opaque layers set none and inherit it as is). A value that can't
+ * be read here, such as `inherit` or a CSS variable, counts as 1.
+ */
+function rootFillOpacity(props: FillMorphSvgProps): number {
+  const value = props.style?.fillOpacity ?? props.fillOpacity;
+  let opacity = Number.NaN;
+  if (typeof value === "number") {
+    opacity = value;
+  } else if (typeof value === "string") {
+    const text = value.trim();
+    const isPercent = text.endsWith("%");
+    const number = isPercent ? text.slice(0, -1) : text;
+    if (number !== "") opacity = Number(number) / (isPercent ? 100 : 1);
+  }
+  return Number.isFinite(opacity) ? Math.min(1, Math.max(0, opacity)) : 1;
+}
 
 type ModeProps = {
   icon: FillMorphIcon;

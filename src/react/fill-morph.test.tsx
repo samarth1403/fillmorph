@@ -17,10 +17,28 @@ import {
 } from "fillmorph";
 import { createMorphDriver } from "fillmorph/dom";
 import { Circle, Heart } from "lucide-react";
-import { act, Component, createRef, type ReactElement, type ReactNode, StrictMode } from "react";
+import {
+  act,
+  Component,
+  type CSSProperties,
+  createRef,
+  type ReactElement,
+  type ReactNode,
+  StrictMode,
+} from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FaCircle, FaHeart, FaRegCircle } from "react-icons/fa6";
-import { MdFavorite, MdSignalWifi1Bar } from "react-icons/md";
+import {
+  MdFavorite,
+  MdSignalWifi1Bar,
+  MdSignalWifi1BarLock,
+  MdSignalWifi2Bar,
+  MdSignalWifi2BarLock,
+  MdSignalWifi3Bar,
+  MdSignalWifi3BarLock,
+  MdWifiCalling1,
+  MdWifiCalling2,
+} from "react-icons/md";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import FillMorph, { type FillMorphHandle } from "./fill-morph";
 import { type FillMorphIcon, FillmorphIconInputError, getIconRendererState } from "./icon-source";
@@ -1062,5 +1080,114 @@ describe("<FillMorph> translucent layers (spec 11)", () => {
     tree.render(<FillMorph icon={<MdSignalWifi1Bar />} springConfig={CONFIG} />);
     runUntilIdle();
     expect(pathsOf(tree.container).map(({ opacity }) => opacity)).toEqual(["0.3", null]);
+  });
+});
+
+describe("<FillMorph> fillOpacity composes with each layer's own opacity (spec 13 #2)", () => {
+  const TWO_TONE_ICONS = {
+    MdSignalWifi1Bar,
+    MdSignalWifi1BarLock,
+    MdSignalWifi2Bar,
+    MdSignalWifi2BarLock,
+    MdSignalWifi3Bar,
+    MdSignalWifi3BarLock,
+    MdWifiCalling1,
+    MdWifiCalling2,
+  };
+  const pathsOf = (container: HTMLElement) =>
+    [...container.querySelectorAll("path")].map((path) => ({
+      d: path.getAttribute("d"),
+      opacity: path.getAttribute("fill-opacity"),
+    }));
+  // What each <path> is drawn at: its own fill-opacity, or the root's it inherits without one.
+  const drawnOpacities = (container: HTMLElement): number[] => {
+    const root = rootSvg(container).getAttribute("fill-opacity") ?? "1";
+    return [...container.querySelectorAll("path")].map((path) =>
+      Number(path.getAttribute("fill-opacity") ?? root),
+    );
+  };
+  const layerOpacities = (icon: string): number[] =>
+    renderLayers(contoursOf(icon)).map(({ opacity }) => opacity);
+
+  for (const [name, Icon] of Object.entries(TWO_TONE_ICONS)) {
+    it(`draws ${name}'s every layer at fillOpacity × its own opacity`, () => {
+      const markup = renderToStaticMarkup(<Icon />);
+      const own = layerOpacities(markup);
+      expect(own.some((opacity) => opacity < 1)).toBe(true);
+      const { container } = track(
+        mount(<FillMorph icon={markup} progress={0} to={markup} fillOpacity={0.4} />),
+      );
+      const drawn = drawnOpacities(container);
+      expect(drawn).toHaveLength(own.length);
+      drawn.forEach((opacity, index) => {
+        expect(opacity).toBeCloseTo(0.4 * (own[index] as number), 9);
+      });
+    });
+  }
+
+  it("draws MdSignalWifi1Bar's 0.3 layer at 0.12 and its opaque layer at 0.4", () => {
+    const markup = renderToStaticMarkup(<MdSignalWifi1Bar />);
+    const { container } = track(
+      mount(<FillMorph icon={markup} progress={0} to={markup} fillOpacity={0.4} />),
+    );
+    expect(pathsOf(container).map(({ opacity }) => opacity)).toEqual(["0.12", null]);
+    expect(rootSvg(container).getAttribute("fill-opacity")).toBe("0.4");
+    expect(drawnOpacities(container)).toEqual([0.12, 0.4]);
+  });
+
+  it("multiplies by fillOpacity given as a string, a percentage, or in style (style wins)", () => {
+    const markup = renderToStaticMarkup(<MdSignalWifi1Bar />);
+    const faded = (props: { fillOpacity?: string; style?: CSSProperties }) =>
+      pathsOf(
+        track(mount(<FillMorph icon={markup} progress={0} to={markup} {...props} />)).container,
+      )[0]?.opacity;
+    expect(faded({ fillOpacity: "0.5" })).toBe("0.15");
+    expect(faded({ fillOpacity: "50%" })).toBe("0.15");
+    expect(faded({ style: { fillOpacity: 0.5 } })).toBe("0.15");
+    expect(faded({ fillOpacity: "0.9", style: { fillOpacity: "0.5" } })).toBe("0.15");
+  });
+
+  it("ignores an unreadable fillOpacity, as a browser does, rather than hiding the layer", () => {
+    const markup = renderToStaticMarkup(<MdSignalWifi1Bar />);
+    for (const fillOpacity of ["inherit", "%", "var(--x)", ""]) {
+      const { container } = track(
+        mount(<FillMorph icon={markup} progress={0} to={markup} fillOpacity={fillOpacity} />),
+      );
+      expect(pathsOf(container)[0]?.opacity).toBe("0.3");
+    }
+  });
+
+  it("composes with a fill-opacity forwarded from an element icon's root, too", () => {
+    const tree = track(mount(<FillMorph icon={SQUARE} springConfig={CONFIG} />));
+    tree.render(<FillMorph icon={<MdSignalWifi1Bar fillOpacity={0.5} />} springConfig={CONFIG} />);
+    runUntilIdle();
+    expect(rootSvg(tree.container).getAttribute("fill-opacity")).toBe("0.5");
+    expect(pathsOf(tree.container).map(({ opacity }) => opacity)).toEqual(["0.15", null]);
+  });
+
+  it("composes through a controlled morph and in uncontrolled mode", () => {
+    const markup = renderToStaticMarkup(<MdSignalWifi1Bar />);
+    const tree = track(
+      mount(<FillMorph icon={markup} to={CIRCLE} progress={0.5} fillOpacity={0.5} />),
+    );
+    const midway = renderLayers(interpolate(contoursOf(markup), contoursOf(CIRCLE), 0.5));
+    expect(drawnOpacities(tree.container)).toEqual(
+      midway.map(({ opacity }) => Math.round(opacity * 0.5 * 1e6) / 1e6),
+    );
+
+    const uncontrolled = track(
+      mount(<FillMorph icon={SQUARE} springConfig={CONFIG} fillOpacity={0.5} />),
+    );
+    uncontrolled.render(<FillMorph icon={markup} springConfig={CONFIG} fillOpacity={0.5} />);
+    runUntilIdle();
+    expect(drawnOpacities(uncontrolled.container)).toEqual([0.15, 0.5]);
+  });
+
+  it("leaves an opaque icon with fillOpacity exactly as before: one <path>, the root's value", () => {
+    const { container } = track(
+      mount(<FillMorph icon={SQUARE} progress={0} to={SQUARE} fillOpacity={0.4} />),
+    );
+    expect(pathsOf(container)).toEqual([{ d: dOf(SQUARE), opacity: null }]);
+    expect(rootSvg(container).getAttribute("fill-opacity")).toBe("0.4");
   });
 });

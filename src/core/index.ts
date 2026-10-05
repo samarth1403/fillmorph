@@ -12,6 +12,7 @@ export {
   FillmorphIncompatibleIconError,
   FillmorphMarkupError,
   FillmorphParseError,
+  isFillmorphError,
 } from "./errors";
 export type { ParsedIcon, ViewBox } from "./icon";
 export { interpolate } from "./morph/interpolate";

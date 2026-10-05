@@ -130,16 +130,19 @@ export function classifyFill(
   });
 
   // Islands: a path's outer shape whose innermost container among every other kept polygon is
-  // another path's hole.
+  // another path's hole. Only outer shapes can become islands, so only they are tested (spec 13
+  // #3: re-testing every nested polygon repeated the per-path containment work).
   const keptIndices = kept.flatMap((entry, index) => (entry === null ? [] : [index]));
-  const global = classifyNesting(
+  const global = containersOf(
     keptIndices.map((index) => polygons[index] as Point[]),
     boundaryTolerance,
+    (position) => kept[keptIndices[position] as number]?.parentIndex === null,
   );
+  const keptAreas = keptIndices.map((index) => areas[index] as number);
   keptIndices.forEach((index, position) => {
     const entry = kept[index];
-    const container = global[position]?.parentIndex;
-    if (entry == null || entry.parentIndex !== null || container == null) return;
+    const container = smallest(global[position] as number[], keptAreas);
+    if (entry == null || entry.parentIndex !== null || container === null) return;
     const containerIndex = keptIndices[container] as number;
     if (pathOf[containerIndex] !== pathOf[index] && kept[containerIndex]?.isHole) {
       entry.parentIndex = containerIndex;
@@ -159,26 +162,32 @@ export function classifyFill(
   return kept.map((entry, index) => (entry === null ? null : { ...entry, depth: depthOf(index) }));
 }
 
-/** For each polygon, the indices of every other polygon that contains it. */
+/**
+ * For each polygon, the indices of every other polygon that contains it. A polygon `isWanted`
+ * rejects gets `[]` without being tested.
+ */
 function containersOf(
   polygons: readonly (readonly Point[])[],
   boundaryTolerance: number,
+  isWanted: (index: number) => boolean = () => true,
 ): number[][] {
   const areas = polygons.map((polygon) => Math.abs(signedArea(polygon)));
   const bounds = polygons.map(boundsOf);
   return polygons.map((inner, innerIndex) =>
-    polygons.flatMap((outer, outerIndex) =>
-      outerIndex !== innerIndex &&
-      (areas[outerIndex] as number) > (areas[innerIndex] as number) &&
-      isBoundsWithin(
-        bounds[innerIndex] as Bounds,
-        bounds[outerIndex] as Bounds,
-        boundaryTolerance,
-      ) &&
-      isPolygonInside(inner, outer, boundaryTolerance)
-        ? [outerIndex]
-        : [],
-    ),
+    !isWanted(innerIndex)
+      ? []
+      : polygons.flatMap((outer, outerIndex) =>
+          outerIndex !== innerIndex &&
+          (areas[outerIndex] as number) > (areas[innerIndex] as number) &&
+          isBoundsWithin(
+            bounds[innerIndex] as Bounds,
+            bounds[outerIndex] as Bounds,
+            boundaryTolerance,
+          ) &&
+          isPolygonInside(inner, outer, boundaryTolerance)
+            ? [outerIndex]
+            : [],
+        ),
   );
 }
 
@@ -226,8 +235,13 @@ function isPolygonInside(
 ): boolean {
   let hasDecidingVertex = false;
   for (const point of inner) {
+    const isInside = isPointInPolygon(point, outer);
+    // Once one vertex decided "inside", another inside vertex can't change the answer, so its
+    // much costlier boundary distance is skipped (spec 13 #3: an icon with ~100 specks inside one
+    // long outline spent most of its parse here).
+    if (isInside && hasDecidingVertex) continue;
     if (distanceToOutline(point, outer) <= boundaryTolerance) continue;
-    if (!isPointInPolygon(point, outer)) return false;
+    if (!isInside) return false;
     hasDecidingVertex = true;
   }
   return hasDecidingVertex;

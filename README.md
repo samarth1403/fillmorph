@@ -199,7 +199,9 @@ slightly with the bounce instead.
 Any other SVG attribute (`className`, `fill`, `width`, `aria-label`, …) goes to the
 rendered `<svg>`, which is drawn in a `0 0 100 100` frame. Pass `fill="currentColor"` to
 follow the text color. The `<svg>` allows overflow by default, so an overshooting spring
-isn't clipped.
+isn't clipped. `fillOpacity` (as a prop or in `style`) multiplies with each translucent
+layer's own opacity: a two-tone icon's 0.3 layer at `fillOpacity={0.4}` draws at 0.12. A
+`fill-opacity` set by a CSS class doesn't reach those layers, since each sets its own.
 
 `useFillMorph(icon, springConfig?)` is the hook `<FillMorph>` is built on, for drawing the
 shape yourself (canvas, composed SVG): it returns `{ contours, retarget, error }`.
@@ -244,8 +246,14 @@ parts).
 | `stepSpring(state, config, target, dt)`                                         | One exact step of the damped spring.                                                                                                        |
 | `CANONICAL_VIEW_BOX`                                                            | The `0 0 100 100` frame every shape is drawn in.                                                                                            |
 | `FillmorphMarkupError`, `FillmorphParseError`, `FillmorphIncompatibleIconError` | What `parseIcon` throws: not SVG, unreadable path data, or outside the requirements.                                                        |
+| `isFillmorphError(value)`                                                       | Whether `value` is any fillmorph error, by `name`. Works where `instanceof` doesn't (see below).                                            |
 
 See each export's TSDoc for the details.
+
+fillmorph ships both ESM and CommonJS builds. If an app loads both (some code `import`s
+fillmorph while other code, or a dependency, `require`s it), there are two copies of each
+error class, and an error from one copy fails `instanceof` against the other's. Use
+`isFillmorphError(error)`, then `error.name`, to tell the errors apart in that case.
 
 </details>
 
@@ -266,7 +274,9 @@ fillmorph morphs icons that are **filled shapes drawn with `<path>`**:
 Shapes are read the way a browser fills them. Each path's `fill-rule` (`nonzero` or
 `evenodd`) and winding decide what's a cutout, and separate `<path>`s stack on top of each
 other, never cutting into one another. A path's `fill-opacity` and `opacity` carry over. A
-subpath without `Z` is filled as if closed, and one that encloses no area is skipped.
+subpath without `Z` is filled as if closed, and one that encloses no area is skipped. An
+icon whose subpaths all cancel each other out (the same shape drawn twice under `evenodd`,
+say), which a browser draws blank, is rejected with an error saying so.
 
 Anything outside this is a parse-time error naming the problem, never a silent bad morph.
 

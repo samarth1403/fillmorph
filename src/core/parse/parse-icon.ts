@@ -11,7 +11,7 @@ import {
   measureExtent,
 } from "./flatten";
 import { signedArea } from "./geometry";
-import { type ExtractedPath, parseSvgMarkup } from "./markup";
+import { type ExtractedPath, type FillRule, parseSvgMarkup } from "./markup";
 import { normalizeContour } from "./normalize";
 import { PathDataSyntaxError, parsePathData, type Subpath } from "./path-data";
 
@@ -66,8 +66,9 @@ const DEGENERATE_AREA_RATIO = 1e-9;
  *
  * @throws FillmorphMarkupError if the markup is not a well-formed SVG with at least one `<path>`.
  * @throws FillmorphIncompatibleIconError if the icon is outside the compatibility contract.
- * @throws FillmorphParseError if a path's `d` is missing or malformed, or no subpath in the icon
- *   encloses any area.
+ * @throws FillmorphParseError if a path's `d` is missing or malformed, no subpath in the icon
+ *   encloses any area, or every subpath cancels out under its fill rule (e.g. the same shape drawn
+ *   twice under `evenodd`).
  */
 export function parseIcon(svg: string): ParsedIcon {
   const markup = parseSvgMarkup(svg);
@@ -101,6 +102,7 @@ export function parseIcon(svg: string): ParsedIcon {
   const opacities = layers.flatMap(({ path, polygons: own }) => own.map(() => path.opacity));
 
   const classified = classifyFill(layers, tolerance);
+  if (classified.every((entry) => entry === null)) throw canceledOutError(layers);
   // Polygons that bound nothing (filled on both sides) are dropped; ids stay consecutive.
   const idOf = new Map<number, string>();
   classified.forEach((entry, index) => {
@@ -128,6 +130,28 @@ export function parseIcon(svg: string): ParsedIcon {
     return [opacity === 1 ? contour : { ...contour, opacity }];
   });
   return { contours, viewBox };
+}
+
+/**
+ * The rejection for an icon whose subpaths all enclose area but fully cancel each other out under
+ * their fill rules (spec 13 #1), so a browser draws nothing. Rather than morph to a silently blank
+ * icon, the message names the paths and how each rule cancels.
+ */
+function canceledOutError(
+  layers: readonly { path: ExtractedPath; polygons: readonly Point[][]; fillRule: FillRule }[],
+): FillmorphParseError {
+  const drawing = layers.filter((layer) => layer.polygons.length > 0);
+  const rules = new Set(drawing.map((layer) => layer.fillRule));
+  const causes = [...rules].map((rule) =>
+    rule === "evenodd"
+      ? 'under the "evenodd" fill rule, an area covered an even number of times is left unfilled, so the same outline drawn twice cancels itself'
+      : 'under the "nonzero" fill rule, the same outline drawn once in each direction (clockwise and counter-clockwise) adds up to zero winding and cancels itself',
+  );
+  return new FillmorphParseError(
+    `Every subpath of ${drawing.map(({ path }) => describePath(path)).join(", ")} cancels out ` +
+      `under its fill rule, so the icon draws nothing (a browser renders it blank): ${causes.join("; ")}. ` +
+      "Remove the duplicated outlines, or check the path's fill-rule.",
+  );
 }
 
 function contourId(index: number): string {

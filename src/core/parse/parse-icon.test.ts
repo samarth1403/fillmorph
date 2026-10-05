@@ -30,6 +30,14 @@ import {
 const svg = (body: string, rootAttributes = ' viewBox="0 0 24 24"'): string =>
   `<svg xmlns="http://www.w3.org/2000/svg"${rootAttributes}>${body}</svg>`;
 const contoursOf = (markup: string): Contour[] => parseIcon(markup).contours;
+const captureMessage = (run: () => unknown): string => {
+  try {
+    run();
+  } catch (error) {
+    return (error as Error).message;
+  }
+  throw new Error("expected a throw");
+};
 const area = (contour: Contour | undefined): number =>
   Math.abs(signedArea(contour?.points ?? []));
 const outers = (contours: Contour[]) =>
@@ -154,6 +162,63 @@ describe("parseIcon - each failure mode has its own error type", () => {
     expect(() => parseIcon(BROKEN_NO_AREA)).toThrow(
       /None of the icon's subpaths encloses any area/,
     );
+  });
+
+  describe("an icon whose subpaths all cancel out (spec 13 #1)", () => {
+    const SQUARE = "M4 4H20V20H4Z";
+    const REVERSED_SQUARE = "M4 4V20H20V4Z";
+
+    it("throws for the same square drawn twice under evenodd, naming the rule and why", () => {
+      const markup = svg(`<path fill-rule="evenodd" d="${SQUARE} ${SQUARE}"/>`);
+      expect(() => parseIcon(markup)).toThrow(FillmorphParseError);
+      expect(() => parseIcon(markup)).toThrow(
+        /Every subpath of <path> #1 cancels out under its fill rule, so the icon draws nothing/,
+      );
+      expect(() => parseIcon(markup)).toThrow(
+        /under the "evenodd" fill rule, an area covered an even number of times is left unfilled, so the same outline drawn twice cancels itself/,
+      );
+      expect(() => parseIcon(markup)).not.toThrow(/nonzero/);
+    });
+
+    it("throws for the same square drawn once each way under nonzero, naming that rule", () => {
+      const markup = svg(`<path d="${SQUARE} ${REVERSED_SQUARE}"/>`);
+      expect(() => parseIcon(markup)).toThrow(FillmorphParseError);
+      expect(() => parseIcon(markup)).toThrow(
+        /under the "nonzero" fill rule, the same outline drawn once in each direction .* cancels itself/,
+      );
+      expect(() => parseIcon(markup)).not.toThrow(/evenodd/);
+    });
+
+    it("names every path, and each rule once, when several paths all cancel", () => {
+      const markup = svg(
+        `<path id="a" fill-rule="evenodd" d="${SQUARE} ${SQUARE}"/>` +
+          `<path d="${SQUARE} ${REVERSED_SQUARE}"/>` +
+          `<path fill-rule="evenodd" d="M6 6H8V8H6Z M6 6H8V8H6Z"/>`,
+      );
+      expect(() => parseIcon(markup)).toThrow(
+        /Every subpath of <path> #1 \(id="a"\), <path> #2, <path> #3 cancels out/,
+      );
+      const message = captureMessage(() => parseIcon(markup));
+      expect(message.match(/"evenodd" fill rule/g)).toHaveLength(1);
+      expect(message.match(/"nonzero" fill rule/g)).toHaveLength(1);
+    });
+
+    it("doesn't throw when only some paths cancel: the rest still draw", () => {
+      const markup = svg(
+        `<path fill-rule="evenodd" d="${SQUARE} ${SQUARE}"/><path d="M2 2H6V6H2Z"/>`,
+      );
+      expect(contoursOf(markup)).toEqual(contoursOf(svg('<path d="M2 2H6V6H2Z"/>')));
+    });
+
+    it("doesn't throw for a square drawn twice the same way under nonzero, which is filled", () => {
+      expect(contoursOf(svg(`<path d="${SQUARE} ${SQUARE}"/>`))).toEqual(
+        contoursOf(svg(`<path d="${SQUARE}"/>`)),
+      );
+    });
+
+    it("keeps the no-area rejection for an icon with no area at all, checked first", () => {
+      expect(() => parseIcon(BROKEN_NO_AREA)).toThrow(/None of the icon's subpaths encloses/);
+    });
   });
 
   it("throws FillmorphParseError for malformed d syntax, with the path and character offset", () => {

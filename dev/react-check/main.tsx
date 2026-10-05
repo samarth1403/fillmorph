@@ -1,5 +1,5 @@
 import { HeartIcon, StarIcon } from "@heroicons/react/24/solid";
-import { parseIcon, type SpringConfig } from "fillmorph";
+import { isFillmorphError, parseIcon, renderLayers, type SpringConfig } from "fillmorph";
 import { createMorphDriver } from "fillmorph/dom";
 import {
   FillMorph,
@@ -678,6 +678,131 @@ const HoleSection = (): ReactElement => {
   );
 };
 
+/** Icons whose subpaths fully cancel out: a browser draws them blank, fillmorph now rejects them. */
+const CANCELED_OUT_CASES: [string, string][] = [
+  [
+    "evenodd, the same square twice",
+    synthetic(`<path fill-rule="evenodd" d="${square(4)} ${square(4)}"/>`),
+  ],
+  [
+    "nonzero, the same square once each way",
+    synthetic(`<path d="${square(4)} ${square(4, true)}"/>`),
+  ],
+];
+
+const CanceledOutCheck = ({ title, markup }: { title: string; markup: string }): ReactElement => {
+  const [error, setError] = useState<FillmorphError | null>(null);
+  return (
+    <figure>
+      <BrowserRender markup={markup} size={96} />
+      <FillMorph
+        icon={markup}
+        onError={setError}
+        width={96}
+        height={96}
+        aria-label={`${title} (fillmorph)`}
+      />
+      <figcaption>
+        {title}
+        <span className="error">
+          {error === null
+            ? " (no error yet)"
+            : ` ${error.name} (isFillmorphError: ${String(isFillmorphError(error))}): ${error.message}`}
+        </span>
+      </figcaption>
+    </figure>
+  );
+};
+
+/** The `fill-opacity` each of `container`'s `<path>`s is drawn at, its own or the root's. */
+function drawnOpacities(container: HTMLElement | null): string {
+  const root = container?.querySelector("svg")?.getAttribute("fill-opacity") ?? "1";
+  return [...(container?.querySelectorAll("path") ?? [])]
+    .map((path) => path.getAttribute("fill-opacity") ?? root)
+    .join(", ");
+}
+
+const FillOpacityCheck = ({
+  name,
+  Icon,
+  fillOpacity,
+}: {
+  name: string;
+  Icon: IconType;
+  fillOpacity: number;
+}): ReactElement => {
+  const ref = useRef<HTMLElement>(null);
+  const [drawn, setDrawn] = useState("");
+  const markup = renderToStaticMarkup(<Icon />);
+  const own = renderLayers(parseIcon(markup).contours).map(({ opacity }) => opacity);
+  useEffect(() => setDrawn(drawnOpacities(ref.current)));
+  return (
+    <figure ref={ref}>
+      <FillMorph
+        icon={markup}
+        width={96}
+        height={96}
+        fillOpacity={fillOpacity}
+        aria-label={`${name} at fillOpacity ${fillOpacity}`}
+      />
+      <figcaption>
+        {name}: own {own.join(", ")} × {fillOpacity} → drawn {drawn}
+      </figcaption>
+    </figure>
+  );
+};
+
+/** Spec 13's by-eye checks (0.4.0): canceled-out icons rejected, fillOpacity composing. */
+const RemainingFixesSection = (): ReactElement => {
+  const [fillOpacity, setFillOpacity] = useState(0.4);
+  return (
+    <section>
+      <h2>Remaining minor fixes (spec 13, 0.4.0)</h2>
+      <h3>Icons whose shapes cancel out</h3>
+      <p>
+        Left: the browser&apos;s own render, which is blank. Right: <code>{"<FillMorph>"}</code>.
+        Look for: an error naming the fill rule and why it cancels, instead of a silently blank icon
+        (0.3.0 drew nothing and reported nothing).
+      </p>
+      <div className="buttons">
+        {CANCELED_OUT_CASES.map(([title, markup]) => (
+          <CanceledOutCheck key={title} title={title} markup={markup} />
+        ))}
+      </div>
+      <h3>
+        <code>fillOpacity</code> on two-tone icons
+      </h3>
+      <p>
+        Each layer should draw at <code>fillOpacity</code> × its own opacity: at 0.4, the faded
+        layer at 0.12 and the top shape at 0.4. Look for: the two tones staying distinct at every
+        value. In 0.3.0 the faded layer ignored <code>fillOpacity</code>, so at 0.3 both tones drew
+        the same, and below that the background drew darker than the top shape.
+      </p>
+      <div className="controls">
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={fillOpacity}
+          onChange={(event) => setFillOpacity(Number(event.target.value))}
+          aria-label="fillOpacity"
+        />
+        <span>fillOpacity = {fillOpacity.toFixed(2)}</span>
+      </div>
+      <div className="buttons">
+        {TWO_TONE_ICONS.map(([name, Icon]) => (
+          <FillOpacityCheck key={name} name={name} Icon={Icon} fillOpacity={fillOpacity} />
+        ))}
+      </div>
+      <p>An opaque icon at the same fillOpacity: one path, unchanged from 0.3.0.</p>
+      <div className="buttons">
+        <FillOpacityCheck name="FaHeart" Icon={FaHeart} fillOpacity={fillOpacity} />
+      </div>
+    </section>
+  );
+};
+
 const App = (): ReactElement => {
   const controlledRef = useRef<FillMorphHandle>(null);
   return (
@@ -688,6 +813,7 @@ const App = (): ReactElement => {
       <ElementSection />
       <BugFixSection />
       <HoleSection />
+      <RemainingFixesSection />
     </>
   );
 };
