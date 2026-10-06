@@ -122,7 +122,7 @@ const IconPicker = ({
   onPick: (icon: DemoIcon) => void;
 }): ReactElement => {
   return (
-    <div className="max-h-[30rem] overflow-y-auto overscroll-contain px-3 pb-2 sm:px-4">
+    <div className="max-h-[30rem] overflow-y-auto px-3 pb-2 sm:px-4">
       {CATEGORIES.map((category) => (
         <section key={category.name} aria-label={category.name}>
           <h3 className="sticky top-0 z-10 flex items-center gap-2 bg-white/95 px-2 py-2.5 text-xs font-semibold tracking-wider text-neutral-500 uppercase backdrop-blur dark:bg-neutral-900/95">
