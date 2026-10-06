@@ -21,7 +21,7 @@ const LINKS = [
  * they refer to (this repo on GitHub, this package on npm).
  */
 const EXTERNAL_LINKS = [
-  { href: "https://github.com/samarth1403/fillmorph", label: "GitHub", markup: githubMark },
+  { href: "https://github.com/samarthikkalaki/fillmorph", label: "GitHub", markup: githubMark },
   { href: "https://www.npmjs.com/package/fillmorph", label: "npm", markup: npmMark },
 ];
 

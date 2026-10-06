@@ -20,11 +20,11 @@
   "author": "Samarth Ikkalaki",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/samarth1403/fillmorph.git"
+    "url": "git+https://github.com/samarthikkalaki/fillmorph.git"
   },
-  "homepage": "https://github.com/samarth1403/fillmorph#readme",
+  "homepage": "https://github.com/samarthikkalaki/fillmorph#readme",
   "bugs": {
-    "url": "https://github.com/samarth1403/fillmorph/issues"
+    "url": "https://github.com/samarthikkalaki/fillmorph/issues"
   },
   "type": "module",
   "packageManager": "pnpm@11.9.0",

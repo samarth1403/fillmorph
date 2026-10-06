@@ -7,7 +7,7 @@
 **Morph filled icons into each other - not a crossfade, not a swap.** 🔄
 
 [![npm version](https://img.shields.io/npm/v/fillmorph)](https://www.npmjs.com/package/fillmorph)
-[![license](https://img.shields.io/github/license/samarth1403/fillmorph)](LICENSE)
+[![license](https://img.shields.io/github/license/samarthikkalaki/fillmorph)](LICENSE)
 [![live demo](https://img.shields.io/badge/demo-fillmorph.com-orange)](https://fillmorph.com/)
 
 **[🎮 Try the live demo →](https://fillmorph.com/)**
