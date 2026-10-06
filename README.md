@@ -8,9 +8,9 @@
 
 [![npm version](https://img.shields.io/npm/v/fillmorph)](https://www.npmjs.com/package/fillmorph)
 [![license](https://img.shields.io/github/license/samarth1403/fillmorph)](LICENSE)
-[![live demo](https://img.shields.io/badge/demo-fillmorph.vercel.app-orange)](https://fillmorph.vercel.app/)
+[![live demo](https://img.shields.io/badge/demo-fillmorph.com-orange)](https://fillmorph.com/)
 
-**[🎮 Try the live demo →](https://fillmorph.vercel.app/)**
+**[🎮 Try the live demo →](https://fillmorph.com/)**
 
 </div>
 
@@ -157,8 +157,8 @@ One package, three entry points:
 | `fillmorph/dom`   | `createMorphDriver`: runs a morph frame by frame in the browser. | nothing                  |
 | `fillmorph/react` | `<FillMorph>` and `useFillMorph`.                                | React ≥18, React DOM ≥18 |
 
-ESM only, with TypeScript types included. Unminified ESM, gzipped: core 15.2 KB, dom 0.6 KB,
-react 5.0 KB (measured on the 0.2.1 build). Icon elements need `react-dom/server`, which
+ESM and CommonJS, with TypeScript types included. Unminified ESM, gzipped: core 17.0 KB, dom
+0.6 KB, react 5.2 KB (measured on the 0.4.0 build). Icon elements need `react-dom/server`, which
 `fillmorph/react` loads with a dynamic `import()` only when an element is first used, so
 bundlers split it into its own chunk (about 61 KB gzipped with React 19) that string-only
 apps never download.
