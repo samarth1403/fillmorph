@@ -3,7 +3,7 @@ import { ALL_ICONS, findIcon } from "../catalog";
 import { Morph } from "../morph";
 import { AMBIENT_SPRING } from "../presets";
 import { StaticIcon } from "../static-icon";
-import { useAmbientTimer } from "../use-page-motion";
+import { useAmbientTimer, useIsOnScreen } from "../use-page-motion";
 
 /**
  * Two tiles start morphing every `SWAP_EVERY_MS`, and each stays live for `LIVE_FOR_MS`, so about
@@ -54,16 +54,26 @@ const LiveMorph = ({ from, to }: { from: string; to: string }): ReactElement => 
 /**
  * One slot on the wall. Drawn still until its icon changes; then a live `<FillMorph>` morphs it
  * in place, and once that has settled the slot goes back to still. Only the moving tiles run an
- * animation driver, about 18 of them, not one per tile for all 164.
+ * animation driver, not one per tile for all 164, and only on screen: a slot scrolled out of view
+ * (most of the wall, on a phone) just takes its new icon still.
  */
-const WallTile = ({ markup }: { markup: string }): ReactElement => {
+const WallTile = ({
+  markup,
+  name,
+  onClick,
+}: {
+  markup: string;
+  name: string;
+  onClick: () => void;
+}): ReactElement => {
+  const [tileRef, isOnScreen] = useIsOnScreen<HTMLLIElement>();
   const [shown, setShown] = useState(markup);
   const [liveFrom, setLiveFrom] = useState<string | null>(null);
   // Adjusting state during render (React's pattern for reacting to a prop change) switches to the
   // live morph before the new icon is ever painted still.
   if (markup !== shown) {
     setShown(markup);
-    setLiveFrom((from) => from ?? shown);
+    if (isOnScreen) setLiveFrom((from) => from ?? shown);
   }
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new icon mid-morph restarts the timer.
   useEffect(() => {
@@ -72,10 +82,24 @@ const WallTile = ({ markup }: { markup: string }): ReactElement => {
     return () => window.clearTimeout(id);
   }, [liveFrom, markup]);
 
-  return liveFrom === null ? (
-    <StaticIcon markup={markup} className="size-7" />
-  ) : (
-    <LiveMorph from={liveFrom} to={markup} />
+  return (
+    <li ref={tileRef} className={TILE_CELL}>
+      {/* A click is an out-of-turn swap, the same move the ambient animation makes, so the
+          two never fight over a tile (spec 08 §1d #6). */}
+      <button
+        type="button"
+        title={name}
+        aria-label={`${name}. Click to morph it.`}
+        onClick={onClick}
+        className={TILE_BUTTON}
+      >
+        {liveFrom === null ? (
+          <StaticIcon markup={markup} className="size-7" />
+        ) : (
+          <LiveMorph from={liveFrom} to={markup} />
+        )}
+      </button>
+    </li>
   );
 };
 
@@ -87,32 +111,23 @@ const WallTile = ({ markup }: { markup: string }): ReactElement => {
 export const IconWall = (): ReactElement => {
   const [order, setOrder] = useState(() => ALL_ICONS.map((icon) => icon.id));
   const shuffle = useCallback(() => setOrder((current) => swapTwo(current)), []);
-  useAmbientTimer(shuffle, SWAP_EVERY_MS);
+  // Scrolled away, the wall stops trading icons altogether.
+  const [wallRef, isOnScreen] = useIsOnScreen<HTMLUListElement>();
+  useAmbientTimer(isOnScreen ? shuffle : null, SWAP_EVERY_MS);
 
   return (
-    <ul className={`grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] ${TILE_FRAME}`}>
+    <ul ref={wallRef} className={`grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] ${TILE_FRAME}`}>
       {order.map((id, slot) => {
         const icon = findIcon(id);
-        const name = `${icon.label}, ${icon.style}`;
         return (
-          <li
+          <WallTile
             // Keyed by slot, not icon: a slot keeps its tile, and a new icon there morphs in place.
             // biome-ignore lint/suspicious/noArrayIndexKey: the slot is the tile's identity.
             key={slot}
-            className={TILE_CELL}
-          >
-            {/* A click is an out-of-turn swap, the same move the ambient animation makes, so the
-                two never fight over a tile (spec 08 §1d #6). */}
-            <button
-              type="button"
-              title={name}
-              aria-label={`${name}. Click to morph it.`}
-              onClick={() => setOrder((current) => swapTwo(current, slot))}
-              className={TILE_BUTTON}
-            >
-              <WallTile markup={icon.markup} />
-            </button>
-          </li>
+            markup={icon.markup}
+            name={`${icon.label}, ${icon.style}`}
+            onClick={() => setOrder((current) => swapTwo(current, slot))}
+          />
         );
       })}
     </ul>

@@ -2,7 +2,7 @@ import { type ReactElement, useCallback, useRef, useState } from "react";
 import { type DemoIcon, findIcon } from "../catalog";
 import { Morph } from "../morph";
 import { HERO_SPRING } from "../presets";
-import { useAmbientTimer } from "../use-page-motion";
+import { useAmbientTimer, useIsOnScreen } from "../use-page-motion";
 import { CopyCommand } from "./copy-command";
 import { TILE_BUTTON, TILE_CELL, TILE_FRAME } from "./icon-wall";
 
@@ -67,13 +67,18 @@ const HeroGrid = (): ReactElement => {
     if (tile === pausedRef.current) return;
     setSteps((all) => all.map((step, index) => (index === tile ? step + 1 : step)));
   }, []);
-  useAmbientTimer(advance, HOLD_MS / TILES);
+  // Scrolled past, the grid holds still rather than spending frames nobody sees.
+  const [gridRef, isOnScreen] = useIsOnScreen<HTMLDivElement>();
+  useAmbientTimer(isOnScreen ? advance : null, HOLD_MS / TILES);
   // A click morphs the tile at once, out of turn, like a click on the icon wall; the ticker
   // carries on from there. It works while hovered (the pause only stops the ticker).
   const morphNow = (tile: number) =>
     setSteps((all) => all.map((step, index) => (index === tile ? step + 1 : step)));
   return (
-    <div className="relative w-full max-w-md justify-self-center lg:max-w-none lg:justify-self-stretch">
+    <div
+      ref={gridRef}
+      className="relative w-full max-w-md justify-self-center lg:max-w-none lg:justify-self-stretch"
+    >
       <div aria-hidden="true" className="hero-glow absolute inset-0 -z-10 rounded-full blur-3xl" />
       <ul
         className={`grid-cols-5 ${TILE_FRAME}`}

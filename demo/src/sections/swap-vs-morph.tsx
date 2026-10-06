@@ -3,7 +3,7 @@ import { type DemoIcon, findIcon } from "../catalog";
 import { Morph } from "../morph";
 import { HERO_SPRING } from "../presets";
 import { StaticIcon } from "../static-icon";
-import { useAmbientTimer } from "../use-page-motion";
+import { useAmbientTimer, useIsOnScreen } from "../use-page-motion";
 
 /**
  * Spec 08 §1f #2: each step is one icon's own outline (regular) version becoming its filled
@@ -72,10 +72,12 @@ const Half = ({
 export const SwapVsMorph = (): ReactElement => {
   const [index, setIndex] = useState(0);
   const advance = useCallback(() => setIndex((current) => (current + 1) % SEQUENCE.length), []);
-  useAmbientTimer(advance, HOLD_MS);
+  const [sectionRef, isOnScreen] = useIsOnScreen<HTMLElement>();
+  useAmbientTimer(isOnScreen ? advance : null, HOLD_MS);
   const current = SEQUENCE[index] as DemoIcon;
   return (
     <section
+      ref={sectionRef}
       id="why"
       aria-labelledby="why-title"
       className="mx-auto max-w-[84rem] scroll-mt-16 px-4 py-12 sm:px-6 sm:py-16"
